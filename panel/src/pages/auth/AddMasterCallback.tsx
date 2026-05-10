@@ -11,8 +11,9 @@ import {
     ApiAddMasterSaveReq,
     ApiAddMasterSaveResp,
     ApiOauthCallbackErrorResp,
+    ReactAuthDataType,
 } from '@shared/authApiTypes';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AuthError, processFetchError, type AuthErrorData } from './errors';
 import GenericSpinner from '@/components/GenericSpinner';
@@ -22,6 +23,21 @@ import { fetchWithTimeout } from '@/hooks/fetch';
 import { LogoutReasonHash } from './Login';
 import { LogoFullSquareGreen } from '@/components/Logos';
 
+type RegisterFormState = {
+    errorMessage: string | undefined;
+    fullPageError: AuthErrorData | undefined;
+    isSaving: boolean;
+    pendingAuth: ReactAuthDataType | null;
+    panelIn: boolean;
+};
+
+function reduceRegisterFormState(state: RegisterFormState, action: Partial<RegisterFormState>): RegisterFormState {
+    return {
+        ...state,
+        ...action,
+    };
+}
+
 function RegisterForm({ fivemId, fivemName, profilePicture }: ApiAddMasterCallbackFivemData) {
     const { setAuthData } = useAuth();
 
@@ -29,47 +45,48 @@ function RegisterForm({ fivemId, fivemName, profilePicture }: ApiAddMasterCallba
     const passwordRef = useRef<HTMLInputElement>(null);
     const password2Ref = useRef<HTMLInputElement>(null);
     const termsRef = useRef<typeof CheckboxPrimitive.Root>(null);
-    const [errorMessage, setErrorMessage] = useState<string | undefined>();
-    const [fullPageError, setFullPageError] = useState<AuthErrorData | undefined>();
-    const [isSaving, setIsSaving] = useState(false);
-
-    // Holds the auth payload while the transition animation plays.
-    // setAuthData is only called once the panel has fully slid over so the
-    // tree switch (AuthShell → MainShell) happens after the animation ends.
-    const [pendingAuth, setPendingAuth] = useState<ApiAddMasterSaveResp | null>(null);
-    const [panelIn, setPanelIn] = useState(false);
+    const [state, dispatch] = useReducer(reduceRegisterFormState, {
+        errorMessage: undefined,
+        fullPageError: undefined,
+        isSaving: false,
+        pendingAuth: null,
+        panelIn: false,
+    });
+    const { errorMessage, fullPageError, isSaving, pendingAuth, panelIn } = state;
 
     const addMasterSave = async (password: string, discordId: string | undefined) => {
         try {
-            setIsSaving(true);
+            dispatch({ isSaving: true });
             const data = await fetchWithTimeout<ApiAddMasterSaveResp, ApiAddMasterSaveReq>(`/auth/addMaster/save`, {
                 method: 'POST',
                 body: { discordId, password },
             });
             if ('error' in data) {
                 if (data.error === 'master_already_set') {
-                    setFullPageError({ errorCode: data.error });
+                    dispatch({ fullPageError: { errorCode: data.error } });
                 } else if (data.error === 'invalid_session') {
-                    setFullPageError({
-                        errorCode: data.error,
-                        returnTo: '/addMaster/pin',
+                    dispatch({
+                        fullPageError: {
+                            errorCode: data.error,
+                            returnTo: '/addMaster/pin',
+                        },
                     });
                 } else {
-                    setErrorMessage(data.error);
+                    dispatch({ errorMessage: data.error });
                 }
             } else {
                 // Store the payload and start the slide-over animation.
                 // setAuthData fires only after the panel finishes sliding.
-                setPendingAuth(data);
+                dispatch({ pendingAuth: data });
                 requestAnimationFrame(() => {
-                    requestAnimationFrame(() => setPanelIn(true));
+                    requestAnimationFrame(() => dispatch({ panelIn: true }));
                 });
             }
         } catch (error) {
             const { errorTitle, errorMessage } = processFetchError(error);
-            setErrorMessage(`${errorTitle}: ${errorMessage}`);
+            dispatch({ errorMessage: `${errorTitle}: ${errorMessage}` });
         } finally {
-            setIsSaving(false);
+            dispatch({ isSaving: false });
         }
     };
 
@@ -84,7 +101,7 @@ function RegisterForm({ fivemId, fivemName, profilePicture }: ApiAddMasterCallba
 
     const handleSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
         event?.preventDefault();
-        setErrorMessage(undefined);
+        dispatch({ errorMessage: undefined });
 
         //Clean and check discord id
         let discordId: string | undefined;
@@ -152,7 +169,7 @@ function RegisterForm({ fivemId, fivemName, profilePicture }: ApiAddMasterCallba
                         Cfx.re account
                         <div className="mt-2 flex flex-row items-center justify-start rounded-md border bg-zinc-900 p-2">
                             <Avatar
-                                className="h-16 w-16 text-3xl"
+                                className="size-16 text-3xl"
                                 username={fivemName}
                                 profilePicture={profilePicture}
                             />
@@ -207,7 +224,7 @@ function RegisterForm({ fivemId, fivemName, profilePicture }: ApiAddMasterCallba
                             required
                         />
                     </div>
-                    <div className="mt-2 flex items-center space-x-2">
+                    <div className="mt-2 flex items-center gap-x-2">
                         {/* @ts-ignore */}
                         <Checkbox id="terms" ref={termsRef} required />
                         <label
@@ -239,7 +256,7 @@ function RegisterForm({ fivemId, fivemName, profilePicture }: ApiAddMasterCallba
                 <CardFooter className="flex-col gap-2">
                     <span className="text-destructive text-center whitespace-pre-wrap">{errorMessage}</span>
                     <Button className="w-full" disabled={isSaving || !!pendingAuth}>
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {isSaving && <Loader2 className="mr-2 size-4 animate-spin" />}
                         Register
                     </Button>
                 </CardFooter>
@@ -308,13 +325,5 @@ export default function AddMasterCallback() {
         submitCallback();
     }, []);
 
-    if (fivemData) {
-        return <RegisterForm {...fivemData} />;
-    } else if (errorData) {
-        return <AuthError error={{ ...errorData, returnTo: '/addMaster/pin' }} />;
-    } else if (isFetching) {
-        return <GenericSpinner msg="Authenticating..." />;
-    } else {
-        return <GenericSpinner />;
-    }
+    return fivemData ? <RegisterForm {...fivemData} /> : errorData ? <AuthError error={{ ...errorData, returnTo: '/addMaster/pin' }} /> : isFetching ? <GenericSpinner msg="Authenticating..." /> : <GenericSpinner />;
 }

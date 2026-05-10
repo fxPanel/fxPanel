@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import ThreadPerfCard from './ThreadPerfCard';
 import PlayerDropCard from './PlayerDropCard';
 import FullPerfCard from './FullPerfCard';
@@ -48,7 +48,7 @@ function DashboardHeaderStats() {
             >
                 <span
                     className={cn(
-                        'h-1.5 w-1.5 rounded-full',
+                        'size-1.5 rounded-full',
                         isRunning && isHealthy
                             ? 'bg-success animate-pulse'
                             : isRunning
@@ -61,12 +61,12 @@ function DashboardHeaderStats() {
             {isRunning && (
                 <>
                     <div className="border-border/50 bg-card flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs">
-                        <UsersIcon className="text-muted-foreground/70 h-3 w-3" />
+                        <UsersIcon className="text-muted-foreground/70 size-3" />
                         <span className="font-mono font-semibold">{playerCount}</span>
                         <span className="text-muted-foreground/70">players</span>
                     </div>
                     <div className="border-border/50 bg-card flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs">
-                        <ClockIcon className="text-muted-foreground/70 h-3 w-3" />
+                        <ClockIcon className="text-muted-foreground/70 size-3" />
                         <span className="font-mono font-semibold">{uptimeStr}</span>
                         <span className="text-muted-foreground/70">uptime</span>
                     </div>
@@ -81,14 +81,20 @@ function DashboardPageInner() {
     const dashboardWidgets = useAddonWidgets('dashboard.main');
     const sidebarWidgets = useAddonWidgets('dashboard.sidebar');
     const status = useAtomValue(globalStatusAtom);
+    const applyDashboardData = useCallback(
+        (nextData: any) => {
+            setDashboardData(nextData);
+        },
+        [setDashboardData],
+    );
 
     //Running on mount only
     useEffect(() => {
         const isDevMockMode = import.meta.env.DEV && isDevMockStatusOptInEnabled();
         if (isDevMockMode) {
-            setDashboardData(createMockDashboardEvent());
+            applyDashboardData(createMockDashboardEvent());
             const mockInterval = setInterval(() => {
-                setDashboardData(createMockDashboardEvent());
+                applyDashboardData(createMockDashboardEvent());
             }, 4_000);
 
             return () => {
@@ -99,7 +105,7 @@ function DashboardPageInner() {
         const socket = getSocket();
 
         const dashboardHandler = (data: any) => {
-            setDashboardData(data);
+            applyDashboardData(data);
         };
 
         socket.on('dashboard', dashboardHandler);
@@ -109,7 +115,7 @@ function DashboardPageInner() {
             socket.off('dashboard', dashboardHandler);
             leaveSocketRoom('dashboard');
         };
-    }, [setDashboardData]);
+    }, [applyDashboardData]);
 
     return (
         <div className="flex min-h-full w-full min-w-96 flex-1 flex-col gap-4">
@@ -210,7 +216,11 @@ export default function DashboardPage() {
     }, [txConfigState, setLocation]);
 
     if (txConfigState === TxConfigState.Setup || txConfigState === TxConfigState.Deployer) {
-        return null;
+        return (
+            <div className="flex size-full min-h-[12rem] items-center justify-center">
+                <GenericSpinner msg="Loading…" />
+            </div>
+        );
     } else if (txConfigState !== TxConfigState.Ready) {
         return (
             <div className="size-full">

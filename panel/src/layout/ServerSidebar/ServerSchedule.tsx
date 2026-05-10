@@ -84,7 +84,7 @@ export default function ServerSchedule() {
         return (
             <div>
                 <h2 className="mb-1 text-lg font-semibold tracking-tight">Next Restart:</h2>
-                <span className="text-muted-foreground font-light italic">loading...</span>
+                <span className="text-muted-foreground font-light italic">loading…</span>
             </div>
         );
     }
@@ -140,7 +140,7 @@ export default function ServerSchedule() {
         }
         schedulerApi({
             data: { action: 'setNextTempSchedule', parameter: input },
-            toastLoadingMessage: 'Scheduling server restart...',
+            toastLoadingMessage: 'Scheduling server restart…',
         });
     };
     const handleEdit = () => {
@@ -161,14 +161,14 @@ export default function ServerSchedule() {
         closeAllSheets();
         schedulerApi({
             data: { action: 'setNextSkip', parameter: true },
-            toastLoadingMessage: 'Cancelling next server restart...',
+            toastLoadingMessage: 'Cancelling next server restart…',
         });
     };
     const handleEnable = () => {
         closeAllSheets();
         schedulerApi({
             data: { action: 'setNextSkip', parameter: false },
-            toastLoadingMessage: 'Enabling next server restart...',
+            toastLoadingMessage: 'Enabling next server restart…',
         });
     };
 
@@ -187,7 +187,7 @@ export default function ServerSchedule() {
                         disabled={!hasSchedulePerms || disableAddEditBtn}
                         onClick={handleEdit}
                     >
-                        <PenLineIcon className="mr-1 h-4 w-4" /> Edit
+                        <PenLineIcon className="mr-1 size-4" /> Edit
                     </Button>
                 ) : (
                     <Button
@@ -197,7 +197,7 @@ export default function ServerSchedule() {
                         disabled={!hasSchedulePerms || disableAddEditBtn}
                         onClick={handleAddSchedule}
                     >
-                        <PlusCircleIcon className="mr-1 h-4 w-4" /> Schedule Restart
+                        <PlusCircleIcon className="mr-1 size-4" /> Schedule Restart
                     </Button>
                 )}
                 {showCancelBtn && (
@@ -208,7 +208,7 @@ export default function ServerSchedule() {
                         onClick={handleCancel}
                         disabled={!hasSchedulePerms}
                     >
-                        <XCircleIcon className="mr-1 h-4 w-4" /> Cancel
+                        <XCircleIcon className="mr-1 size-4" /> Cancel
                     </Button>
                 )}
                 {showEnableBtn && (
@@ -219,7 +219,7 @@ export default function ServerSchedule() {
                         onClick={handleEnable}
                         disabled={!hasSchedulePerms}
                     >
-                        <PlayCircleIcon className="mr-1 h-4 w-4" /> Enable
+                        <PlayCircleIcon className="mr-1 size-4" /> Enable
                     </Button>
                 )}
             </div>

@@ -101,8 +101,16 @@ const ActionLogEntry = memo(function ActionLogEntry({ event, onAdminClick }: Act
                     cfg.borderColor,
                 )}
                 onClick={() => setModalOpen(true)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        if (e.key === ' ') e.preventDefault();
+                        setModalOpen(true);
+                    }
+                }}
+                role="button"
+                tabIndex={0}
             >
-                <Icon className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', cfg.color)} />
+                <Icon className={cn('mt-0.5 size-3.5 shrink-0', cfg.color)} />
 
                 <span
                     className="text-muted-foreground mt-px w-18 shrink-0 text-xs tabular-nums"
@@ -126,7 +134,7 @@ const ActionLogEntry = memo(function ActionLogEntry({ event, onAdminClick }: Act
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <Icon className={cn('h-5 w-5', cfg.color)} />
+                            <Icon className={cn('size-5', cfg.color)} />
                             <span className={cfg.color}>{cfg.label}</span>
                         </DialogTitle>
                         <DialogDescription>
@@ -137,7 +145,7 @@ const ActionLogEntry = memo(function ActionLogEntry({ event, onAdminClick }: Act
                     <div className="space-y-3 text-sm">
                         {/* Admin */}
                         <div className="flex items-start gap-2">
-                            <UserIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                            <UserIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
                             <div>
                                 <p className="text-muted-foreground text-xs font-medium">Admin</p>
                                 <p className="font-semibold">{event.author}</p>
@@ -146,7 +154,7 @@ const ActionLogEntry = memo(function ActionLogEntry({ event, onAdminClick }: Act
 
                         {/* Timestamp */}
                         <div className="flex items-start gap-2">
-                            <ClockIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                            <ClockIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
                             <div>
                                 <p className="text-muted-foreground text-xs font-medium">Timestamp</p>
                                 <p>{fullTime}</p>
@@ -158,7 +166,7 @@ const ActionLogEntry = memo(function ActionLogEntry({ event, onAdminClick }: Act
 
                         {/* Category */}
                         <div className="flex items-start gap-2">
-                            <TagIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                            <TagIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
                             <div>
                                 <p className="text-muted-foreground text-xs font-medium">Category</p>
                                 <p className={cfg.color}>{cfg.label}</p>
@@ -168,7 +176,7 @@ const ActionLogEntry = memo(function ActionLogEntry({ event, onAdminClick }: Act
                         {/* Action */}
                         {event.action && (
                             <div className="flex items-start gap-2">
-                                <TextIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                                <TextIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
                                 <div className="min-w-0">
                                     <p className="text-muted-foreground text-xs font-medium">Action</p>
                                     <p className="wrap-break-word whitespace-pre-wrap">{event.action}</p>
@@ -182,11 +190,11 @@ const ActionLogEntry = memo(function ActionLogEntry({ event, onAdminClick }: Act
                         <Button variant="secondary" size="xs" onClick={handleCopy} className="gap-1.5">
                             {copied ? (
                                 <>
-                                    <CheckIcon className="h-3.5 w-3.5 text-green-500" /> Copied
+                                    <CheckIcon className="size-3.5 text-green-500" /> Copied
                                 </>
                             ) : (
                                 <>
-                                    <CopyIcon className="h-3.5 w-3.5" /> Copy
+                                    <CopyIcon className="size-3.5" /> Copy
                                 </>
                             )}
                         </Button>

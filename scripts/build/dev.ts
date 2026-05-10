@@ -16,7 +16,9 @@ process.stdout.write('.\n'.repeat(40) + '\x1B[2J\x1B[H');
 const txDevEnv = parseTxDevEnv();
 if (!txDevEnv.FXSERVER_PATH || !txDevEnv.VITE_URL) {
     console.error(`Missing 'TXDEV_FXSERVER_PATH' and/or 'TXDEV_VITE_URL' env variables.`);
-    console.error('Please read the docs/development.md file for more information.');
+    console.error(
+        'See docs/CONTRIBUTING.md, shared/txDevEnv.ts, and https://github.com/SomeAussieGaymer/fxPanel-Docs/tree/main for setup.',
+    );
     process.exit(1);
 }
 

@@ -42,7 +42,7 @@ export default function PlayerBanTab({ playerRef }: PlayerBanTabProps) {
         playerBanApi({
             queryParams: playerRef,
             data: { reason, duration },
-            toastLoadingMessage: 'Banning player...',
+            toastLoadingMessage: 'Banning player…',
             genericHandler: {
                 successMsg: 'Player banned.',
             },
@@ -69,7 +69,7 @@ export default function PlayerBanTab({ playerRef }: PlayerBanTabProps) {
                 <Button size="sm" variant="destructive" disabled={isSaving} onClick={handleSave}>
                     {isSaving ? (
                         <span className="flex items-center leading-relaxed">
-                            <Loader2Icon className="inline h-4 animate-spin" /> Banning...
+                            <Loader2Icon className="inline h-4 animate-spin" /> Banning…
                         </span>
                     ) : (
                         'Apply Ban'

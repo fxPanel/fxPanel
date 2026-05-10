@@ -11,6 +11,7 @@ import {
     getPageConfig,
     configsReducer,
     getConfigDiff,
+    reconcileCardPendingSave,
     type PageConfigReducerAction,
 } from '../utils';
 import { PlusIcon, TrashIcon, Undo2Icon, XIcon } from 'lucide-react';
@@ -79,33 +80,37 @@ function RestartScheduleBox({ restartTimes, setRestartTimes, disabled }: Restart
                             </span>
                             <p>
                                 {'Presets: '}
-                                <a
+                                <button
+                                    type="button"
                                     onClick={() => applyPreset(['00:00'])}
-                                    className="text-primary cursor-pointer text-sm hover:underline"
+                                    className="text-primary inline cursor-pointer bg-transparent p-0 text-sm hover:underline"
                                 >
                                     1x<span className={presetSpanClasses}>/day</span>
-                                </a>
+                                </button>
                                 {', '}
-                                <a
+                                <button
+                                    type="button"
                                     onClick={() => applyPreset(['00:00', '12:00'])}
-                                    className="text-primary cursor-pointer text-sm hover:underline"
+                                    className="text-primary inline cursor-pointer bg-transparent p-0 text-sm hover:underline"
                                 >
                                     2x<span className={presetSpanClasses}>/day</span>
-                                </a>
+                                </button>
                                 {', '}
-                                <a
+                                <button
+                                    type="button"
                                     onClick={() => applyPreset(['00:00', '08:00', '16:00'])}
-                                    className="text-primary cursor-pointer text-sm hover:underline"
+                                    className="text-primary inline cursor-pointer bg-transparent p-0 text-sm hover:underline"
                                 >
                                     3x<span className={presetSpanClasses}>/day</span>
-                                </a>
+                                </button>
                                 {', '}
-                                <a
+                                <button
+                                    type="button"
                                     onClick={() => applyPreset(['00:00', '06:00', '12:00', '18:00'])}
-                                    className="text-primary cursor-pointer text-sm hover:underline"
+                                    className="text-primary inline cursor-pointer bg-transparent p-0 text-sm hover:underline"
                                 >
                                     4x<span className={presetSpanClasses}>/day</span>
-                                </a>
+                                </button>
                             </p>
                         </div>
                     )}
@@ -113,7 +118,7 @@ function RestartScheduleBox({ restartTimes, setRestartTimes, disabled }: Restart
                         restartTimes.map((time, index) => (
                             <div
                                 key={time}
-                                className="bg-secondary text-secondary-foreground flex items-center space-x-1 rounded-md px-3 py-1 select-none"
+                                className="bg-secondary text-secondary-foreground flex items-center gap-x-1 rounded-md px-3 py-1 select-none"
                             >
                                 <span className="font-mono">{time}</span>
                                 {!disabled && (
@@ -195,7 +200,7 @@ function TimeZoneWarning() {
 
 const RETENTION_PRESETS = ['3', '7', '14', '30', '60', '90'];
 
-export const pageConfigs = {
+const pageConfigs = {
     dataPath: getPageConfig('server', 'dataPath'),
     restarterSchedule: getPageConfig('restarter', 'schedule'),
     restarterIntervalHours: getPageConfig('restarter', 'intervalHours'),
@@ -210,7 +215,7 @@ export const pageConfigs = {
     resourceTolerance: getPageConfig('restarter', 'resourceStartingTolerance', true),
 } as const;
 
-export default function ConfigCardFxserver({ cardCtx, pageCtx }: SettingsCardProps) {
+function useConfigCardFxserver({ cardCtx, pageCtx }: SettingsCardProps) {
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [isResettingServerData, setIsResettingServerData] = useState(false);
     const { hasPerm } = useAdminPerms();
@@ -303,7 +308,7 @@ export default function ConfigCardFxserver({ cardCtx, pageCtx }: SettingsCardPro
         }
 
         const res = getConfigDiff(cfg, states, overwrites, showAdvanced);
-        pageCtx.setCardPendingSave(res.hasChanges ? cardCtx : null);
+        pageCtx.setCardPendingSave(reconcileCardPendingSave(cardCtx, res.hasChanges));
         return res;
     };
 
@@ -413,7 +418,7 @@ export default function ConfigCardFxserver({ cardCtx, pageCtx }: SettingsCardPro
                         disabled={pageCtx.isReadOnly || !hasPerm('all_permissions') || isResettingServerData}
                         onClick={handleResetServerData}
                     >
-                        <Undo2Icon className="mr-2 h-4 w-4" /> Reset
+                        <Undo2Icon className="mr-2 size-4" /> Reset
                     </Button>
                 </div>
                 <SettingItemDesc>
@@ -652,4 +657,8 @@ export default function ConfigCardFxserver({ cardCtx, pageCtx }: SettingsCardPro
             </SettingItem>
         </SettingsCardShell>
     );
+}
+
+export default function ConfigCardFxserver(props: SettingsCardProps) {
+    return useConfigCardFxserver(props);
 }

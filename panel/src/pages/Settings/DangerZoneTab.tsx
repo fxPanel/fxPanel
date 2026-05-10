@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useReducer } from 'react';
 import { useBackendApi, ApiTimeout } from '@/hooks/fetch';
 import { useAdminPerms } from '@/hooks/auth';
 import { txToast } from '@/components/TxToaster';
 import { useOpenConfirmDialog } from '@/hooks/dialogs';
 import { Button } from '@/components/ui/button';
 import { Loader2Icon } from 'lucide-react';
+import { createDuplicateKeyResolver } from '@/lib/utils';
 
 type CleanDbResp = {
     msElapsed?: number;
@@ -20,7 +21,67 @@ type RevokeWlResp = {
     error?: string;
 };
 
+type DangerZoneState = {
+    isCleaningDb: boolean;
+    isRevokingWl: boolean;
+    players: string;
+    bans: string;
+    warns: string;
+    hwids: string;
+    wlFilter: string;
+};
+
+const reduceDangerZoneState = (state: DangerZoneState, action: Partial<DangerZoneState>) => {
+    return {
+        ...state,
+        ...action,
+    };
+};
+
 const SELECT_CLASS = 'bg-secondary text-secondary-foreground w-full rounded-md border px-3 py-2 text-sm';
+
+function DangerZoneAccessWarnings({ isMasterAdmin, isWebInterface }: { isMasterAdmin: boolean; isWebInterface: boolean }) {
+    return (
+        <>
+            {!isMasterAdmin && (
+                <div className="border-warning/30 bg-warning-hint rounded-lg border p-4 text-center text-sm">
+                    <strong>Warning:</strong> You must be the Master Admin to use the options below.
+                </div>
+            )}
+            {!isWebInterface && (
+                <div className="border-warning/30 bg-warning-hint rounded-lg border p-4 text-center text-sm">
+                    <strong>Warning:</strong> These functions are disabled for the in-game menu - please use the web
+                    version.
+                </div>
+            )}
+        </>
+    );
+}
+
+function BackupDatabaseCard({ disabled }: { disabled: boolean }) {
+    return (
+        <div className="border-border/60 bg-card rounded-xl border">
+            <div className="border-border/40 border-b px-5 py-3">
+                <h3 className="font-semibold">Backup Database</h3>
+                <p className="text-muted-foreground text-sm">
+                    Download a copy of <code>playersDB.json</code> containing all players and actions.
+                </p>
+            </div>
+            <div className="flex items-center justify-end px-5 py-4">
+                <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={disabled}
+                    onClick={() => {
+                        window.open('/masterActions/backupDatabase', '_blank', 'noopener');
+                    }}
+                >
+                    Backup Database
+                </Button>
+            </div>
+        </div>
+    );
+}
 
 export default function DangerZoneTab() {
     const { hasPerm } = useAdminPerms();
@@ -28,15 +89,17 @@ export default function DangerZoneTab() {
     const isWebInterface = window.txConsts.isWebInterface;
     const disableActions = !(isMasterAdmin && isWebInterface);
     const openConfirmDialog = useOpenConfirmDialog();
-
-    const [isCleaningDb, setIsCleaningDb] = useState(false);
-    const [isRevokingWl, setIsRevokingWl] = useState(false);
-
-    const [players, setPlayers] = useState('none');
-    const [bans, setBans] = useState('none');
-    const [warns, setWarns] = useState('none');
-    const [hwids, setHwids] = useState('none');
-    const [wlFilter, setWlFilter] = useState('30d');
+    const getChangeKey = createDuplicateKeyResolver();
+    const [state, dispatch] = useReducer(reduceDangerZoneState, {
+        isCleaningDb: false,
+        isRevokingWl: false,
+        players: 'none',
+        bans: 'none',
+        warns: 'none',
+        hwids: 'none',
+        wlFilter: '30d',
+    });
+    const { isCleaningDb, isRevokingWl, players, bans, warns, hwids, wlFilter } = state;
 
     const cleanDbApi = useBackendApi<CleanDbResp>({
         method: 'POST',
@@ -86,19 +149,19 @@ export default function DangerZoneTab() {
             title: 'Are you sure you want to:',
             message: (
                 <ul className="mt-2 list-inside list-disc space-y-1">
-                    {changes.map((c, i) => (
-                        <li key={i}>{c}</li>
+                    {changes.map((change) => (
+                        <li key={getChangeKey(change)}>{change}</li>
                     ))}
                 </ul>
             ),
             actionLabel: 'Clean Database',
             onConfirm: () => {
-                setIsCleaningDb(true);
+                dispatch({ isCleaningDb: true });
                 cleanDbApi({
                     data: { players, bans, warns, hwids },
                     timeout: ApiTimeout.LONG,
                     success(d) {
-                        setIsCleaningDb(false);
+                        dispatch({ isCleaningDb: false });
                         if (d.error) {
                             txToast.error(d.error);
                         } else {
@@ -108,7 +171,7 @@ export default function DangerZoneTab() {
                         }
                     },
                     error(msg) {
-                        setIsCleaningDb(false);
+                        dispatch({ isCleaningDb: false });
                         txToast.error(msg);
                     },
                 });
@@ -127,12 +190,12 @@ export default function DangerZoneTab() {
             message: actionText,
             actionLabel: 'Revoke Whitelists',
             onConfirm: () => {
-                setIsRevokingWl(true);
+                dispatch({ isRevokingWl: true });
                 revokeWlApi({
                     data: { filter: wlFilter },
                     timeout: ApiTimeout.LONG,
                     success(d) {
-                        setIsRevokingWl(false);
+                        dispatch({ isRevokingWl: false });
                         if (d.error) {
                             txToast.error(d.error);
                         } else {
@@ -142,7 +205,7 @@ export default function DangerZoneTab() {
                         }
                     },
                     error(msg) {
-                        setIsRevokingWl(false);
+                        dispatch({ isRevokingWl: false });
                         txToast.error(msg);
                     },
                 });
@@ -152,39 +215,8 @@ export default function DangerZoneTab() {
 
     return (
         <div className="space-y-6">
-            {!isMasterAdmin && (
-                <div className="border-warning/30 bg-warning-hint rounded-lg border p-4 text-center text-sm">
-                    <strong>Warning:</strong> You must be the Master Admin to use the options below.
-                </div>
-            )}
-            {!isWebInterface && (
-                <div className="border-warning/30 bg-warning-hint rounded-lg border p-4 text-center text-sm">
-                    <strong>Warning:</strong> These functions are disabled for the in-game menu - please use the web
-                    version.
-                </div>
-            )}
-
-            {/* Backup Database */}
-            <div className="border-border/60 bg-card rounded-xl border">
-                <div className="border-border/40 border-b px-5 py-3">
-                    <h3 className="font-semibold">Backup Database</h3>
-                    <p className="text-muted-foreground text-sm">
-                        Download a copy of <code>playersDB.json</code> containing all players and actions.
-                    </p>
-                </div>
-                <div className="flex items-center justify-end px-5 py-4">
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={disableActions}
-                        onClick={() => {
-                            window.open('/masterActions/backupDatabase', '_blank', 'noopener');
-                        }}
-                    >
-                        Backup Database
-                    </Button>
-                </div>
-            </div>
+            <DangerZoneAccessWarnings isMasterAdmin={isMasterAdmin} isWebInterface={isWebInterface} />
+            <BackupDatabaseCard disabled={disableActions} />
 
             {/* Revoke Whitelists */}
             <div className="border-destructive/30 bg-card rounded-xl border">
@@ -205,7 +237,7 @@ export default function DangerZoneTab() {
                                 id="wl-filter-select"
                                 className={SELECT_CLASS}
                                 value={wlFilter}
-                                onChange={(e) => setWlFilter(e.target.value)}
+                                onChange={(e) => dispatch({ wlFilter: e.target.value })}
                             >
                                 <option value="30d">players that haven't joined in the last 30 days</option>
                                 <option value="15d">players that haven't joined in the last 15 days</option>
@@ -221,7 +253,7 @@ export default function DangerZoneTab() {
                             disabled={disableActions || isRevokingWl}
                             onClick={handleRevokeWl}
                         >
-                            {isRevokingWl && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
+                            {isRevokingWl && <Loader2Icon className="mr-2 size-4 animate-spin" />}
                             Revoke Whitelists
                         </Button>
                     </div>
@@ -251,7 +283,7 @@ export default function DangerZoneTab() {
                                 id="clean-db-players-select"
                                 className={SELECT_CLASS}
                                 value={players}
-                                onChange={(e) => setPlayers(e.target.value)}
+                                onChange={(e) => dispatch({ players: e.target.value })}
                             >
                                 <option value="none">none</option>
                                 <option value="60d">inactive over 60 days</option>
@@ -274,7 +306,7 @@ export default function DangerZoneTab() {
                                 id="clean-db-bans-select"
                                 className={SELECT_CLASS}
                                 value={bans}
-                                onChange={(e) => setBans(e.target.value)}
+                                onChange={(e) => dispatch({ bans: e.target.value })}
                             >
                                 <option value="none">none</option>
                                 <option value="revoked">revoked</option>
@@ -294,7 +326,7 @@ export default function DangerZoneTab() {
                                 id="clean-db-warns-select"
                                 className={SELECT_CLASS}
                                 value={warns}
-                                onChange={(e) => setWarns(e.target.value)}
+                                onChange={(e) => dispatch({ warns: e.target.value })}
                             >
                                 <option value="none">none</option>
                                 <option value="revoked">revoked</option>
@@ -316,7 +348,7 @@ export default function DangerZoneTab() {
                                 id="clean-db-hwids-select"
                                 className={SELECT_CLASS}
                                 value={hwids}
-                                onChange={(e) => setHwids(e.target.value)}
+                                onChange={(e) => dispatch({ hwids: e.target.value })}
                             >
                                 <option value="none">none</option>
                                 <option value="players">from players</option>
@@ -337,7 +369,7 @@ export default function DangerZoneTab() {
                             disabled={disableActions || isCleaningDb}
                             onClick={handleCleanDb}
                         >
-                            {isCleaningDb && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
+                            {isCleaningDb && <Loader2Icon className="mr-2 size-4 animate-spin" />}
                             Clean Database
                         </Button>
                     </div>

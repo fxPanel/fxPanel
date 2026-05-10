@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LazyMonacoEditor } from '@/components/LazyMonacoEditor';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -19,7 +19,9 @@ type SheetBackdropProps = {
 
 function SheetBackdrop({ isOpen, closeSheet }: SheetBackdropProps) {
     return (
-        <div
+        <button
+            type="button"
+            aria-label="Close JSON editor panel"
             className={cn(
                 'absolute inset-0 z-20',
                 'bg-black/60 duration-300',
@@ -50,7 +52,8 @@ function DiscordJsonEditor({
     description,
     placeholders,
 }: JSONConfigEditorProps) {
-    const [config, setConfig] = useState(initialConfig);
+    const initialConfigRef = useRef(initialConfig);
+    const [config, setConfig] = useState(initialConfigRef.current);
     const [error, setError] = useState<string | null>(null);
     const [isPanelOpen, setIsPanelOpen] = useState(false);
 
@@ -90,9 +93,9 @@ function DiscordJsonEditor({
                     >
                         {isPanelOpen ? 'Hide Placeholders' : 'Show Placeholders'}
                         {isPanelOpen ? (
-                            <ChevronRight className="ml-2 h-4 w-4" />
+                            <ChevronRight className="ml-2 size-4" />
                         ) : (
-                            <ChevronLeft className="ml-2 h-4 w-4" />
+                            <ChevronLeft className="ml-2 size-4" />
                         )}
                     </Button>
                 </div>
@@ -155,17 +158,17 @@ function DiscordJsonEditor({
 
                 <div className="flex justify-between">
                     <Button variant="outline" onClick={onBack}>
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                        <ArrowLeft className="mr-2 size-4" /> Back
                     </Button>
                     <div className="space-x-2">
-                        <Button variant="outline" onClick={() => setConfig(initialConfig)}>
-                            <XIcon className="mr-2 h-4 w-4" /> Discard Changes
+                        <Button variant="outline" onClick={() => setConfig(initialConfigRef.current)}>
+                            <XIcon className="mr-2 size-4" /> Discard Changes
                         </Button>
                         <Button variant="outline" onClick={() => setConfig(defaultConfig)}>
-                            <RotateCcw className="mr-2 h-4 w-4" /> Reset to Default
+                            <RotateCcw className="mr-2 size-4" /> Reset to Default
                         </Button>
                         <Button onClick={handleSave} disabled={!!error}>
-                            <Save className="mr-2 h-4 w-4" /> Save Changes
+                            <Save className="mr-2 size-4" /> Save Changes
                         </Button>
                     </div>
                 </div>

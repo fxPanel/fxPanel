@@ -110,8 +110,10 @@ const filterBySearch = (players: PlayersTablePlayerType[], searchValue: string, 
     if (searchType === 'playerIds') {
         const ids = query
             .split(/[\s,]+/)
-            .map((id) => id.trim())
-            .filter(Boolean);
+            .flatMap((id) => {
+                const trimmedId = id.trim();
+                return trimmedId ? [trimmedId] : [];
+            });
         if (!ids.length) return players;
 
         return players.filter((p) => {
@@ -121,7 +123,9 @@ const filterBySearch = (players: PlayersTablePlayerType[], searchValue: string, 
             const discord = Number.isNaN(parsed)
                 ? ''
                 : `discord:${(900000000000000000n + BigInt(parsed)).toString()}`.toLowerCase();
-            const idSet = [normalizedLicense, discord, p.displayName.toLowerCase()].filter(Boolean);
+            const idSet = [normalizedLicense, discord, p.displayName.toLowerCase()].flatMap((id) =>
+                id ? [id] : [],
+            );
             return ids.some((needle) => idSet.some((id) => id.includes(needle)));
         });
     }
@@ -134,8 +138,10 @@ const filterByFlags = (players: PlayersTablePlayerType[], filtersCsv?: string) =
     const filters = new Set(
         filtersCsv
             .split(',')
-            .map((f) => f.trim())
-            .filter(Boolean),
+            .flatMap((filterValue) => {
+                const trimmedFilter = filterValue.trim();
+                return trimmedFilter ? [trimmedFilter] : [];
+            }),
     );
 
     return players.filter((p) => {
@@ -150,7 +156,7 @@ const filterByFlags = (players: PlayersTablePlayerType[], filtersCsv?: string) =
 };
 
 const sortPlayers = (players: PlayersTablePlayerType[], sorting: PlayersTableSortingType) => {
-    const sorted = [...players].sort((a, b) => {
+    const sorted = players.toSorted((a, b) => {
         const aVal = a[sorting.key];
         const bVal = b[sorting.key];
         if (aVal === bVal) {

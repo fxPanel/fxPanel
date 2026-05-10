@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth, useAdminPerms } from '@/hooks/auth';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useReducer, useState } from 'react';
 import { TabsTrigger, TabsList, TabsContent, Tabs } from '@/components/ui/tabs';
 import {
     ApiChangeIdentifiersReq,
@@ -20,6 +20,246 @@ import { txToast } from './TxToaster';
 import useSWR from 'swr';
 import TxAnchor from './TxAnchor';
 import QRCode from 'qrcode';
+
+type ChangeIdentifiersState = {
+    cfxreId: string;
+    discordId: string;
+    error: string;
+    isConvertingFivemId: boolean;
+    isSaving: boolean;
+};
+
+function reduceChangeIdentifiersState(
+    state: ChangeIdentifiersState,
+    action: Partial<ChangeIdentifiersState>,
+): ChangeIdentifiersState {
+    return {
+        ...state,
+        ...action,
+    };
+}
+
+type TwoFactorStep = 'status' | 'setup' | 'backup' | 'disable';
+
+type TwoFactorState = {
+    step: TwoFactorStep;
+    setupSecret: string;
+    qrDataUrl: string;
+    verifyCode: string;
+    backupCodes: string[];
+    disablePassword: string;
+    disableCode: string;
+    error: string;
+    isProcessing: boolean;
+};
+
+function reduceTwoFactorState(state: TwoFactorState, action: Partial<TwoFactorState>): TwoFactorState {
+    return {
+        ...state,
+        ...action,
+    };
+}
+
+function TwoFactorStatusStep({
+    enabled,
+    error,
+    isProcessing,
+    onStartSetup,
+    onStartDisable,
+}: {
+    enabled: boolean;
+    error: string;
+    isProcessing: boolean;
+    onStartSetup: () => void;
+    onStartDisable: () => void;
+}) {
+    return (
+        <div>
+            <p className="text-muted-foreground text-sm">
+                Two-factor authentication adds an extra layer of security to your account by requiring a code from your
+                authenticator app when logging in.
+            </p>
+            <div className="mt-4 flex items-center justify-between rounded-md border p-3">
+                <div>
+                    <p className="text-sm font-medium">2FA Status</p>
+                    <p className={`text-sm ${enabled ? 'text-success' : 'text-muted-foreground'}`}>
+                        {enabled ? 'Enabled' : 'Disabled'}
+                    </p>
+                </div>
+                {enabled ? (
+                    <Button variant="destructive" size="sm" onClick={onStartDisable}>
+                        Disable 2FA
+                    </Button>
+                ) : (
+                    <Button size="sm" onClick={onStartSetup} disabled={isProcessing}>
+                        {isProcessing ? 'Loading...' : 'Enable 2FA'}
+                    </Button>
+                )}
+            </div>
+            {error && <p className="text-destructive mt-2 text-center text-sm">{error}</p>}
+        </div>
+    );
+}
+
+function TwoFactorSetupStep({
+    setupSecret,
+    qrDataUrl,
+    verifyCode,
+    error,
+    isProcessing,
+    onCodeChange,
+    onCancel,
+    onConfirm,
+}: {
+    setupSecret: string;
+    qrDataUrl: string;
+    verifyCode: string;
+    error: string;
+    isProcessing: boolean;
+    onCodeChange: (code: string) => void;
+    onCancel: () => void;
+    onConfirm: () => void;
+}) {
+    return (
+        <div>
+            <p className="text-muted-foreground mb-3 text-sm">
+                Scan the QR code below with your authenticator app (Google Authenticator, Authy, etc.), then enter the
+                6-digit code to verify.
+            </p>
+            <div className="mb-3 flex justify-center">
+                {qrDataUrl ? (
+                    <img src={qrDataUrl} alt="TOTP QR Code" className="rounded-md border" width={200} height={200} />
+                ) : (
+                    <p className="text-muted-foreground text-sm">QR code unavailable. Enter the key manually below.</p>
+                )}
+            </div>
+            <div className="mb-3">
+                <p className="text-muted-foreground mb-1 text-xs">Can't scan? Enter this key manually:</p>
+                <code className="bg-muted block rounded p-2 text-center font-mono text-xs break-all select-all">
+                    {setupSecret}
+                </code>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="totp-verify-code">Verification Code</Label>
+                <Input
+                    id="totp-verify-code"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="000000"
+                    maxLength={6}
+                    value={verifyCode}
+                    onChange={(e) => onCodeChange(e.target.value)}
+                />
+            </div>
+            {error && <p className="text-destructive mt-2 text-center text-sm">{error}</p>}
+            <div className="mt-4 flex gap-2">
+                <Button variant="ghost" className="flex-1" onClick={onCancel}>
+                    Cancel
+                </Button>
+                <Button className="flex-1" onClick={onConfirm} disabled={isProcessing}>
+                    {isProcessing ? 'Verifying...' : 'Verify & Enable'}
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+function TwoFactorBackupStep({
+    backupCodes,
+    onCopy,
+    onFinish,
+}: {
+    backupCodes: string[];
+    onCopy: () => void;
+    onFinish: () => void;
+}) {
+    return (
+        <div>
+            <p className="text-warning-inline mb-3 text-sm font-medium">
+                Save these backup codes in a safe place. Each code can only be used once. You won't be able to see them
+                again.
+            </p>
+            <div className="bg-muted mb-3 rounded-md p-3">
+                <div className="grid grid-cols-2 gap-1 font-mono text-sm">
+                    {backupCodes.map((code) => (
+                        <div key={code} className="text-center">
+                            {code}
+                        </div>
+                    ))}
+                </div>
+            </div>
+            <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={onCopy}>
+                    Copy Codes
+                </Button>
+                <Button className="flex-1" onClick={onFinish}>
+                    Finish setup
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+function TwoFactorDisableStep({
+    disablePassword,
+    disableCode,
+    error,
+    isProcessing,
+    onPasswordChange,
+    onCodeChange,
+    onCancel,
+    onDisable,
+}: {
+    disablePassword: string;
+    disableCode: string;
+    error: string;
+    isProcessing: boolean;
+    onPasswordChange: (password: string) => void;
+    onCodeChange: (code: string) => void;
+    onCancel: () => void;
+    onDisable: () => void;
+}) {
+    return (
+        <div>
+            <p className="text-muted-foreground mb-3 text-sm">
+                To disable two-factor authentication, enter your current password and a 2FA code.
+            </p>
+            <div className="space-y-3 pb-4">
+                <div className="space-y-1">
+                    <Label htmlFor="disable-password">Password</Label>
+                    <Input
+                        id="disable-password"
+                        type="password"
+                        placeholder="Enter your password"
+                        value={disablePassword}
+                        onChange={(e) => onPasswordChange(e.target.value)}
+                    />
+                </div>
+                <div className="space-y-1">
+                    <Label htmlFor="disable-code">2FA Code</Label>
+                    <Input
+                        id="disable-code"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="000000"
+                        maxLength={6}
+                        value={disableCode}
+                        onChange={(e) => onCodeChange(e.target.value)}
+                    />
+                </div>
+            </div>
+            {error && <p className="text-destructive -mt-2 mb-4 text-center text-sm">{error}</p>}
+            <div className="flex gap-2">
+                <Button variant="ghost" className="flex-1" onClick={onCancel}>
+                    Cancel
+                </Button>
+                <Button variant="destructive" className="flex-1" onClick={onDisable} disabled={isProcessing}>
+                    {isProcessing ? 'Disabling...' : 'Disable 2FA'}
+                </Button>
+            </div>
+        </div>
+    );
+}
 
 /**
  * Change Password tab
@@ -69,10 +309,14 @@ const ChangePasswordTab = memo(function () {
                 if ('success' in data) {
                     if (authData.isTempPassword) {
                         setAccountModalTab('identifiers');
-                        setAuthData({
-                            ...authData,
-                            isTempPassword: false,
-                        });
+                        setAuthData((prev) =>
+                            prev
+                                ? {
+                                      ...prev,
+                                      isTempPassword: false,
+                                  }
+                                : prev,
+                        );
                     } else {
                         txToast.success('Password changed successfully!');
                         closeAccountModal();
@@ -109,7 +353,6 @@ const ChangePasswordTab = memo(function () {
                                 placeholder="Enter current password"
                                 type="password"
                                 value={oldPassword}
-                                autoFocus
                                 required
                                 onChange={(e) => {
                                     setOldPassword(e.target.value);
@@ -126,7 +369,6 @@ const ChangePasswordTab = memo(function () {
                             placeholder="Enter new password"
                             type="password"
                             value={newPassword}
-                            autoFocus={authData.isTempPassword}
                             required
                             onChange={(e) => {
                                 setNewPassword(e.target.value);
@@ -164,12 +406,15 @@ const ChangePasswordTab = memo(function () {
  */
 function ChangeIdentifiersTab() {
     const authedFetcher = useAuthedFetcher();
-    const [cfxreId, setCfxreId] = useState('');
-    const [discordId, setDiscordId] = useState('');
-    const [error, setError] = useState('');
-    const [isConvertingFivemId, setIsConvertingFivemId] = useState(false);
+    const [state, dispatch] = useReducer(reduceChangeIdentifiersState, {
+        cfxreId: '',
+        discordId: '',
+        error: '',
+        isConvertingFivemId: false,
+        isSaving: false,
+    });
+    const { cfxreId, discordId, error, isConvertingFivemId, isSaving } = state;
     const closeAccountModal = useCloseAccountModal();
-    const [isSaving, setIsSaving] = useState(false);
 
     const currIdsResp = useSWR<ApiChangeIdentifiersReq>(
         '/auth/getIdentifiers',
@@ -183,12 +428,14 @@ function ChangeIdentifiersTab() {
 
     useEffect(() => {
         if (!currIdsResp.data) return;
-        setCfxreId(currIdsResp.data.cfxreId);
-        setDiscordId(currIdsResp.data.discordId);
+        dispatch({
+            cfxreId: currIdsResp.data.cfxreId,
+            discordId: currIdsResp.data.discordId,
+        });
     }, [currIdsResp.data]);
 
     useEffect(() => {
-        setError(currIdsResp.error?.message ?? '');
+        dispatch({ error: currIdsResp.error?.message ?? '' });
     }, [currIdsResp.error]);
 
     const changeIdentifiersApi = useBackendApi<GenericApiOkResp, ApiChangeIdentifiersReq>({
@@ -198,20 +445,18 @@ function ChangeIdentifiersTab() {
 
     const handleSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
         event?.preventDefault();
-        setError('');
-        setIsSaving(true);
+        dispatch({ error: '', isSaving: true });
         changeIdentifiersApi({
             data: { cfxreId, discordId },
             error: (error) => {
-                setError(error);
+                dispatch({ error, isSaving: false });
             },
             success: (data) => {
-                setIsSaving(false);
                 if ('success' in data) {
                     txToast.success('Identifiers changed successfully!');
                     closeAccountModal();
                 } else {
-                    setError(data.error);
+                    dispatch({ error: data.error, isSaving: false });
                 }
             },
         });
@@ -221,22 +466,23 @@ function ChangeIdentifiersTab() {
         if (!cfxreId) return;
         const trimmed = cfxreId.trim();
         if (/^\d+$/.test(trimmed)) {
-            setCfxreId(`fivem:${trimmed}`);
+            dispatch({ cfxreId: `fivem:${trimmed}` });
         } else if (!trimmed.startsWith('fivem:')) {
             try {
-                setIsConvertingFivemId(true);
+                dispatch({ isConvertingFivemId: true });
                 const forumData = await fetchWithTimeout(`https://forum.cfx.re/u/${trimmed}.json`);
                 if (forumData.user && typeof forumData.user.id === 'number') {
-                    setCfxreId(`fivem:${forumData.user.id}`);
+                    dispatch({ cfxreId: `fivem:${forumData.user.id}` });
                 } else {
-                    setError('Could not find the user in the forum. Make sure you typed the username correctly.');
+                    dispatch({ error: 'Could not find the user in the forum. Make sure you typed the username correctly.' });
                 }
-            } catch (error) {
-                setError('Failed to check the identifiers on the forum API.');
+            } catch {
+                dispatch({ error: 'Failed to check the identifiers on the forum API.' });
+            } finally {
+                dispatch({ isConvertingFivemId: false });
             }
-            setIsConvertingFivemId(false);
         } else if (cfxreId !== trimmed) {
-            setCfxreId(trimmed);
+            dispatch({ cfxreId: trimmed });
         }
     };
 
@@ -244,9 +490,9 @@ function ChangeIdentifiersTab() {
         if (!discordId) return;
         const trimmed = discordId.trim();
         if (/^\d+$/.test(trimmed)) {
-            setDiscordId(`discord:${trimmed}`);
+            dispatch({ discordId: `discord:${trimmed}` });
         } else if (discordId !== trimmed) {
-            setDiscordId(trimmed);
+            dispatch({ discordId: trimmed });
         }
     };
 
@@ -271,11 +517,9 @@ function ChangeIdentifiersTab() {
                             placeholder="fivem:000000"
                             value={currIdsResp.isLoading || isConvertingFivemId ? 'loading...' : cfxreId}
                             disabled={currIdsResp.isLoading || isConvertingFivemId}
-                            autoFocus
                             onBlur={handleCfxreIdBlur}
                             onChange={(e) => {
-                                setCfxreId(e.target.value);
-                                setError('');
+                                dispatch({ cfxreId: e.target.value, error: '' });
                             }}
                         />
                         <p className="text-muted-foreground text-sm">
@@ -302,8 +546,7 @@ function ChangeIdentifiersTab() {
                             disabled={currIdsResp.isLoading}
                             onBlur={handleDiscordIdBlur}
                             onChange={(e) => {
-                                setDiscordId(e.target.value);
-                                setError('');
+                                dispatch({ discordId: e.target.value, error: '' });
                             }}
                         />
                         <p className="text-muted-foreground text-sm">
@@ -333,16 +576,19 @@ function TwoFactorTab() {
     const { authData, setAuthData } = useAuth();
     const closeAccountModal = useCloseAccountModal();
 
-    const [step, setStep] = useState<'status' | 'setup' | 'backup' | 'disable'>('status');
-    const [setupUri, setSetupUri] = useState('');
-    const [setupSecret, setSetupSecret] = useState('');
-    const [qrDataUrl, setQrDataUrl] = useState('');
-    const [verifyCode, setVerifyCode] = useState('');
-    const [backupCodes, setBackupCodes] = useState<string[]>([]);
-    const [disablePassword, setDisablePassword] = useState('');
-    const [disableCode, setDisableCode] = useState('');
-    const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    const [state, dispatch] = useReducer(reduceTwoFactorState, {
+        step: 'status',
+        setupSecret: '',
+        qrDataUrl: '',
+        verifyCode: '',
+        backupCodes: [],
+        disablePassword: '',
+        disableCode: '',
+        error: '',
+        isProcessing: false,
+    });
+    const { step, setupSecret, qrDataUrl, verifyCode, backupCodes, disablePassword, disableCode, error, isProcessing } =
+        state;
 
     const authedFetcher = useAuthedFetcher();
     const safeAuthData = authData && typeof authData === 'object' ? authData : null;
@@ -350,81 +596,92 @@ function TwoFactorTab() {
     const is2faEnabled = safeAuthData?.totpEnabled ?? false;
 
     const handleStartSetup = async () => {
-        setError('');
-        setIsLoading(true);
+        dispatch({ error: '', isProcessing: true });
         try {
             const data = await authedFetcher<ApiTotpSetupResp>('/auth/totp/setup', {
                 method: 'POST',
             });
             if ('error' in data) {
-                setError(data.error);
+                dispatch({ error: data.error });
             } else {
-                setSetupUri(data.uri);
-                setSetupSecret(data.secret);
+                let dataUrl = '';
                 try {
-                    const dataUrl = await QRCode.toDataURL(data.uri, { width: 200, margin: 2 });
-                    setQrDataUrl(dataUrl);
+                    dataUrl = await QRCode.toDataURL(data.uri, { width: 200, margin: 2 });
                 } catch {
                     // QR generation failed - user can still manually enter
                 }
-                setStep('setup');
+                dispatch({
+                    setupSecret: data.secret,
+                    qrDataUrl: dataUrl,
+                    step: 'setup',
+                });
             }
-        } catch (e) {
-            setError('Failed to start 2FA setup.');
+        } catch {
+            dispatch({ error: 'Failed to start 2FA setup.' });
         } finally {
-            setIsLoading(false);
+            dispatch({ isProcessing: false });
         }
     };
 
     const handleConfirmSetup = async () => {
         if (!verifyCode.trim()) return;
-        setError('');
-        setIsLoading(true);
+        dispatch({ error: '', isProcessing: true });
         try {
             const data = await authedFetcher<ApiTotpConfirmResp>('/auth/totp/confirm', {
                 method: 'POST',
                 body: { code: verifyCode.trim() },
             });
             if ('error' in data) {
-                setError(data.error);
+                dispatch({ error: data.error });
             } else {
-                setBackupCodes(data.backupCodes);
-                setStep('backup');
-                if (authData) {
-                    setAuthData({ ...authData, totpEnabled: true });
-                }
+                dispatch({ backupCodes: data.backupCodes, step: 'backup' });
+                setAuthData((prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              totpEnabled: true,
+                          }
+                        : prev,
+                );
             }
-        } catch (e) {
-            setError('Failed to confirm 2FA setup.');
+        } catch {
+            dispatch({ error: 'Failed to confirm 2FA setup.' });
         } finally {
-            setIsLoading(false);
+            dispatch({ isProcessing: false });
         }
     };
 
     const handleDisable = async () => {
         if (!disablePassword || !disableCode.trim()) return;
-        setError('');
-        setIsLoading(true);
+        dispatch({ error: '', isProcessing: true });
         try {
             const data = await authedFetcher<ApiTotpDisableResp>('/auth/totp/disable', {
                 method: 'POST',
                 body: { password: disablePassword, code: disableCode.trim() },
             });
             if ('error' in data) {
-                setError(data.error);
+                dispatch({ error: data.error });
             } else {
-                if (authData) {
-                    setAuthData({ ...authData, totpEnabled: false });
-                }
-                setStep('status');
-                setDisablePassword('');
-                setDisableCode('');
+                setAuthData((prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              totpEnabled: false,
+                          }
+                        : prev,
+                );
+                dispatch({
+                    step: 'status',
+                    disablePassword: '',
+                    disableCode: '',
+                    error: '',
+                });
                 txToast.success('Two-factor authentication disabled.');
             }
-        } catch (e) {
-            setError('Failed to disable 2FA.');
+        } catch {
+            dispatch({ error: 'Failed to disable 2FA.' });
         } finally {
-            setIsLoading(false);
+            dispatch({ isProcessing: false });
         }
     };
 
@@ -438,185 +695,62 @@ function TwoFactorTab() {
     return (
         <TabsContent value="security" tabIndex={undefined}>
             {step === 'status' && (
-                <div>
-                    <p className="text-muted-foreground text-sm">
-                        Two-factor authentication adds an extra layer of security to your account by requiring a code
-                        from your authenticator app when logging in.
-                    </p>
-                    <div className="mt-4 flex items-center justify-between rounded-md border p-3">
-                        <div>
-                            <p className="text-sm font-medium">2FA Status</p>
-                            <p className={`text-sm ${is2faEnabled ? 'text-success' : 'text-muted-foreground'}`}>
-                                {is2faEnabled ? 'Enabled' : 'Disabled'}
-                            </p>
-                        </div>
-                        {is2faEnabled ? (
-                            <Button variant="destructive" size="sm" onClick={() => setStep('disable')}>
-                                Disable 2FA
-                            </Button>
-                        ) : (
-                            <Button size="sm" onClick={handleStartSetup} disabled={isLoading}>
-                                {isLoading ? 'Loading...' : 'Enable 2FA'}
-                            </Button>
-                        )}
-                    </div>
-                    {error && <p className="text-destructive mt-2 text-center text-sm">{error}</p>}
-                </div>
+                <TwoFactorStatusStep
+                    enabled={is2faEnabled}
+                    error={error}
+                    isProcessing={isProcessing}
+                    onStartSetup={handleStartSetup}
+                    onStartDisable={() => dispatch({ step: 'disable' })}
+                />
             )}
 
             {step === 'setup' && (
-                <div>
-                    <p className="text-muted-foreground mb-3 text-sm">
-                        Scan the QR code below with your authenticator app (Google Authenticator, Authy, etc.), then
-                        enter the 6-digit code to verify.
-                    </p>
-                    <div className="mb-3 flex justify-center">
-                        {qrDataUrl ? (
-                            <img
-                                src={qrDataUrl}
-                                alt="TOTP QR Code"
-                                className="rounded-md border"
-                                width={200}
-                                height={200}
-                            />
-                        ) : (
-                            <p className="text-muted-foreground text-sm">
-                                QR code unavailable. Enter the key manually below.
-                            </p>
-                        )}
-                    </div>
-                    <div className="mb-3">
-                        <p className="text-muted-foreground mb-1 text-xs">Can't scan? Enter this key manually:</p>
-                        <code className="bg-muted block rounded p-2 text-center font-mono text-xs break-all select-all">
-                            {setupSecret}
-                        </code>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="totp-verify-code">Verification Code</Label>
-                        <Input
-                            id="totp-verify-code"
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="000000"
-                            maxLength={6}
-                            value={verifyCode}
-                            autoFocus
-                            onChange={(e) => {
-                                setVerifyCode(e.target.value);
-                                setError('');
-                            }}
-                        />
-                    </div>
-                    {error && <p className="text-destructive mt-2 text-center text-sm">{error}</p>}
-                    <div className="mt-4 flex gap-2">
-                        <Button
-                            variant="ghost"
-                            className="flex-1"
-                            onClick={() => {
-                                setStep('status');
-                                setError('');
-                            }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button className="flex-1" onClick={handleConfirmSetup} disabled={isLoading}>
-                            {isLoading ? 'Verifying...' : 'Verify & Enable'}
-                        </Button>
-                    </div>
-                </div>
+                <TwoFactorSetupStep
+                    setupSecret={setupSecret}
+                    qrDataUrl={qrDataUrl}
+                    verifyCode={verifyCode}
+                    error={error}
+                    isProcessing={isProcessing}
+                    onCodeChange={(verifyCode) => dispatch({ verifyCode, error: '' })}
+                    onCancel={() => dispatch({ step: 'status', error: '' })}
+                    onConfirm={handleConfirmSetup}
+                />
             )}
 
             {step === 'backup' && (
-                <div>
-                    <p className="text-warning-inline mb-3 text-sm font-medium">
-                        Save these backup codes in a safe place. Each code can only be used once. You won't be able to
-                        see them again.
-                    </p>
-                    <div className="bg-muted mb-3 rounded-md p-3">
-                        <div className="grid grid-cols-2 gap-1 font-mono text-sm">
-                            {backupCodes.map((code, i) => (
-                                <div key={i} className="text-center">
-                                    {code}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" className="flex-1" onClick={handleCopyBackupCodes}>
-                            Copy Codes
-                        </Button>
-                        <Button
-                            className="flex-1"
-                            onClick={() => {
-                                setStep('status');
-                                setBackupCodes([]);
-                                setVerifyCode('');
-                                setSetupUri('');
-                                setSetupSecret('');
-                                setQrDataUrl('');
-                            }}
-                        >
-                            Done
-                        </Button>
-                    </div>
-                </div>
+                <TwoFactorBackupStep
+                    backupCodes={backupCodes}
+                    onCopy={handleCopyBackupCodes}
+                    onFinish={() => {
+                        dispatch({
+                            step: 'status',
+                            backupCodes: [],
+                            verifyCode: '',
+                            setupSecret: '',
+                            qrDataUrl: '',
+                        });
+                    }}
+                />
             )}
 
             {step === 'disable' && (
-                <div>
-                    <p className="text-muted-foreground mb-3 text-sm">
-                        To disable two-factor authentication, enter your current password and a 2FA code.
-                    </p>
-                    <div className="space-y-3 pb-4">
-                        <div className="space-y-1">
-                            <Label htmlFor="disable-password">Password</Label>
-                            <Input
-                                id="disable-password"
-                                type="password"
-                                placeholder="Enter your password"
-                                value={disablePassword}
-                                autoFocus
-                                onChange={(e) => {
-                                    setDisablePassword(e.target.value);
-                                    setError('');
-                                }}
-                            />
-                        </div>
-                        <div className="space-y-1">
-                            <Label htmlFor="disable-code">2FA Code</Label>
-                            <Input
-                                id="disable-code"
-                                type="text"
-                                inputMode="numeric"
-                                placeholder="000000"
-                                maxLength={6}
-                                value={disableCode}
-                                onChange={(e) => {
-                                    setDisableCode(e.target.value);
-                                    setError('');
-                                }}
-                            />
-                        </div>
-                    </div>
-                    {error && <p className="text-destructive -mt-2 mb-4 text-center text-sm">{error}</p>}
-                    <div className="flex gap-2">
-                        <Button
-                            variant="ghost"
-                            className="flex-1"
-                            onClick={() => {
-                                setStep('status');
-                                setError('');
-                                setDisablePassword('');
-                                setDisableCode('');
-                            }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button variant="destructive" className="flex-1" onClick={handleDisable} disabled={isLoading}>
-                            {isLoading ? 'Disabling...' : 'Disable 2FA'}
-                        </Button>
-                    </div>
-                </div>
+                <TwoFactorDisableStep
+                    disablePassword={disablePassword}
+                    disableCode={disableCode}
+                    error={error}
+                    isProcessing={isProcessing}
+                    onPasswordChange={(disablePassword) => dispatch({ disablePassword, error: '' })}
+                    onCodeChange={(disableCode) => dispatch({ disableCode, error: '' })}
+                    onCancel={() => {
+                        dispatch({
+                            step: 'status',
+                            error: '',
+                            disablePassword: '',
+                            disableCode: '',
+                        });
+                    }}
+                    onDisable={handleDisable}
+                />
             )}
         </TabsContent>
     );

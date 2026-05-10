@@ -134,16 +134,17 @@ export const useShellBreakpoints = () => {
     useEffect(() => {
         const updateBreakpoints = () => setBreakpoints(getBreakpoints());
         const viewport = window.visualViewport;
+        const passiveListenerOptions = { passive: true } as const;
 
         updateBreakpoints();
-        window.addEventListener('resize', updateBreakpoints);
-        viewport?.addEventListener('resize', updateBreakpoints);
-        viewport?.addEventListener('scroll', updateBreakpoints);
+        window.addEventListener('resize', updateBreakpoints, passiveListenerOptions);
+        viewport?.addEventListener('resize', updateBreakpoints, passiveListenerOptions);
+        viewport?.addEventListener('scroll', updateBreakpoints, passiveListenerOptions);
 
         return () => {
-            window.removeEventListener('resize', updateBreakpoints);
-            viewport?.removeEventListener('resize', updateBreakpoints);
-            viewport?.removeEventListener('scroll', updateBreakpoints);
+            window.removeEventListener('resize', updateBreakpoints, passiveListenerOptions);
+            viewport?.removeEventListener('resize', updateBreakpoints, passiveListenerOptions);
+            viewport?.removeEventListener('scroll', updateBreakpoints, passiveListenerOptions);
         };
     }, []);
 

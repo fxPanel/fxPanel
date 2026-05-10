@@ -1,5 +1,6 @@
 import { ErrorBoundary } from 'react-error-boundary';
 import type { ReactElement } from 'react';
+import { useEffect } from 'react';
 import { Route as WouterRoute, Switch } from 'wouter';
 import { PageErrorFallback } from '@/components/ErrorFallback';
 import { useAtomValue, useSetAtom } from 'jotai';
@@ -214,23 +215,37 @@ const allRoutes: RouteType[] = [
     // },
 ];
 
-function Route(route: RouteType) {
+function RouteContent({ route }: { route: RouteType }) {
     const { hasPerm } = useAdminPerms();
     const setPageTitle = useSetPageTitle();
-    setPageTitle(route.title);
-    const nodeToRender =
-        route.permission && !hasPerm(route.permission) ? (
-            <UnauthorizedPage pageName={route.title} permission={route.permission} />
-        ) : (
-            route.Page
-        );
-    return <WouterRoute path={route.path}>{nodeToRender}</WouterRoute>;
+
+    useEffect(() => {
+        setPageTitle(route.title);
+    }, [route.title, setPageTitle]);
+
+    if (route.permission && !hasPerm(route.permission)) {
+        return <UnauthorizedPage pageName={route.title} permission={route.permission} />;
+    }
+
+    return route.Page;
+}
+
+function Route(route: RouteType) {
+    return (
+        <WouterRoute path={route.path}>
+            <RouteContent route={route} />
+        </WouterRoute>
+    );
 }
 
 function AddonRouteContent({ route }: { route: AddonPageRoute }) {
     const { hasPerm } = useAdminPerms();
     const setPageTitle = useSetPageTitle();
-    setPageTitle(route.title);
+
+    useEffect(() => {
+        setPageTitle(route.title);
+    }, [route.title, setPageTitle]);
+
     if (route.permission && !hasPerm(route.permission)) {
         return <UnauthorizedPage pageName={route.title} permission={route.permission} />;
     }
@@ -243,7 +258,7 @@ function AddonRouteContent({ route }: { route: AddonPageRoute }) {
     );
 }
 
-export function MainRouterInner() {
+function MainRouterInner() {
     const { pages: addonPages, loading: addonsLoading } = useAddonLoader();
 
     return (

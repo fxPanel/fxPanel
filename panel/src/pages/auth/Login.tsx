@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,7 +16,12 @@ function MobileServerHeader() {
     if (!server?.name) return null;
     return (
         <div className="mb-6 flex items-center gap-3 xl:hidden">
-            <ServerGlowIcon iconFilename={server.icon} serverName={server.name} gameName={server.game} />
+            <ServerGlowIcon
+                iconFilename={server.icon}
+                iconDataUrl={server.iconDataUrl}
+                serverName={server.name}
+                gameName={server.game}
+            />
             <div>
                 <div className="text-base leading-tight font-semibold">{server.name}</div>
                 <div className="text-muted-foreground text-xs">Sign in to continue</div>
@@ -36,12 +41,12 @@ export enum LogoutReasonHash {
 
 export default function Login() {
     const { setAuthData } = useAuth();
-    const usernameRef = useRef<HTMLInputElement>(null);
-    const passwordRef = useRef<HTMLInputElement>(null);
+    const [credentials, setCredentials] = useState({ username: '', password: '' });
     const [errorMessage, setErrorMessage] = useState<string | undefined>();
     const [isFetching, setIsFetching] = useState(false);
     const [fetchingAction, setFetchingAction] = useState<'' | 'login' | 'discourse' | 'discord'>('');
     const setLocation = useLocation()[1];
+    const { username, password } = credentials;
 
     const onError = (error: any) => {
         const { errorTitle, errorMessage } = processFetchError(error);
@@ -66,8 +71,8 @@ export default function Login() {
                 {
                     method: 'POST',
                     body: {
-                        username: usernameRef.current?.value ?? '',
-                        password: passwordRef.current?.value ?? '',
+                        username,
+                        password,
                     },
                 },
             );
@@ -139,8 +144,10 @@ export default function Login() {
             const rawLocalStorageStr = localStorage.getItem('authCredsAutofill');
             if (rawLocalStorageStr) {
                 const [user, pass] = JSON.parse(rawLocalStorageStr);
-                if (usernameRef.current) usernameRef.current.value = user ?? '';
-                if (passwordRef.current) passwordRef.current.value = pass ?? '';
+                setCredentials({
+                    username: user ?? '',
+                    password: pass ?? '',
+                });
             }
         } catch (error) {
             console.error('Username/Pass autofill failed', error);
@@ -151,28 +158,26 @@ export default function Login() {
     useEffect(() => {
         const hash = window.location.hash;
         if (!hash) return;
+        let nextErrorMessage: string | undefined;
         if (hash === LogoutReasonHash.LOGOUT) {
-            setErrorMessage('Logged out.');
+            nextErrorMessage = 'Logged out.';
         } else if (hash === LogoutReasonHash.EXPIRED) {
-            setErrorMessage('Session expired.');
+            nextErrorMessage = 'Session expired.';
         } else if (hash === LogoutReasonHash.UPDATED) {
-            setErrorMessage('fxPanel updated — please sign in again.');
+            nextErrorMessage = 'fxPanel updated — please sign in again.';
         } else if (hash === LogoutReasonHash.MASTER_ALREADY_SET) {
-            setErrorMessage('Master account already configured.');
+            nextErrorMessage = 'Master account already configured.';
         } else if (hash === LogoutReasonHash.SHUTDOWN) {
-            setErrorMessage('fxPanel server shut down.\nStart it again to sign in.');
+            nextErrorMessage = 'fxPanel server shut down.\nStart it again to sign in.';
+        }
+        if (nextErrorMessage) {
+            setErrorMessage(nextErrorMessage);
         }
         history.replaceState(null, document.title, window.location.pathname + window.location.search);
     }, []);
 
     return (
-        <form
-            onSubmit={(e) => {
-                e.preventDefault();
-                handleLogin();
-            }}
-            className="flex flex-col gap-5"
-        >
+        <form action={handleLogin} className="flex flex-col gap-5">
             <MobileServerHeader />
 
             {/* Heading */}
@@ -196,12 +201,18 @@ export default function Login() {
                     </Label>
                     <Input
                         id="frm-login"
-                        ref={usernameRef}
                         type="text"
                         placeholder="your username"
                         autoCapitalize="off"
                         autoComplete="off"
                         className="bg-background/60 h-10"
+                        value={username}
+                        onChange={(e) =>
+                            setCredentials((prev) => ({
+                                ...prev,
+                                username: e.target.value,
+                            }))
+                        }
                         required
                     />
                 </div>
@@ -211,12 +222,18 @@ export default function Login() {
                     </Label>
                     <Input
                         id="frm-password"
-                        ref={passwordRef}
                         type="password"
                         placeholder="••••••••"
                         autoCapitalize="off"
                         autoComplete="off"
                         className="bg-background/60 h-10"
+                        value={password}
+                        onChange={(e) =>
+                            setCredentials((prev) => ({
+                                ...prev,
+                                password: e.target.value,
+                            }))
+                        }
                         required
                     />
                 </div>
@@ -228,7 +245,7 @@ export default function Login() {
                 className="bg-accent text-accent-foreground hover:bg-accent/90 h-10 w-full font-medium"
                 disabled={isFetching}
             >
-                {fetchingAction === 'login' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {fetchingAction === 'login' ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 Sign in
             </Button>
 
@@ -247,7 +264,7 @@ export default function Login() {
                     disabled={isFetching}
                     onClick={handleDiscourseRedirect}
                 >
-                    {fetchingAction === 'discourse' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {fetchingAction === 'discourse' ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                     <span className="mr-2 font-bold text-[#F40552]">cfx</span>
                     Cfx.re Account
                 </Button>
@@ -261,9 +278,9 @@ export default function Login() {
                         onClick={handleDiscordRedirect}
                     >
                         {fetchingAction === 'discord' ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader2 className="mr-2 size-4 animate-spin" />
                         ) : (
-                            <FaDiscord className="mr-2 h-4 w-4 text-[#5865F2]" />
+                            <FaDiscord className="mr-2 size-4 text-[#5865F2]" />
                         )}
                         Discord
                     </Button>

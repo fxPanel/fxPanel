@@ -33,6 +33,15 @@ function NewPlayersChart({ daily }: Props) {
         day: d.day.slice(5), // 'MM-DD'
         count: d.count,
     }));
+    const tickValues =
+        data.length > 30
+            ? data.reduce<string[]>((values, entry, index) => {
+                  if (index % Math.ceil(data.length / 15) === 0) {
+                      values.push(entry.day as string);
+                  }
+                  return values;
+              }, [])
+            : undefined;
 
     return (
         <div style={{ height: 260 }}>
@@ -50,10 +59,7 @@ function NewPlayersChart({ daily }: Props) {
                     tickSize: 5,
                     tickPadding: 5,
                     tickRotation: -45,
-                    tickValues:
-                        data.length > 30
-                            ? data.filter((_, i) => i % Math.ceil(data.length / 15) === 0).map((d) => d.day as string)
-                            : undefined,
+                    tickValues,
                 }}
                 axisLeft={{
                     tickSize: 5,

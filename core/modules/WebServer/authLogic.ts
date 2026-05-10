@@ -1,4 +1,5 @@
 const modulename = 'WebServer:AuthLogic';
+import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import consoleFactory from '@lib/console';
 import type { SessToolsType } from '@modules/WebServer/middlewares/sessionMws';
@@ -240,13 +241,21 @@ export const nuiAuthLogic = (
             return failResp('Invalid Request: identifiers header');
         }
 
-        // Check token value
-        if (reqHeader['x-txadmin-token'] !== txCore.webServer.luaComToken) {
-            const expected = txCore.webServer.luaComToken;
-            const censoredExpected = expected.slice(0, 6) + '...' + expected.slice(-6);
-            console.verbose.warn(
-                `NUI Auth Failed: token received '${reqHeader['x-txadmin-token']}' !== expected '${censoredExpected}'.`,
-            );
+        // Check token value (timing-safe, consistent with intercom / host token checks)
+        const tokenHeader = reqHeader['x-txadmin-token'];
+        const expectedTok = txCore.webServer.luaComToken;
+        if (
+            typeof tokenHeader !== 'string' ||
+            typeof expectedTok !== 'string' ||
+            !expectedTok.length ||
+            tokenHeader.length !== expectedTok.length ||
+            !timingSafeEqual(Buffer.from(tokenHeader), Buffer.from(expectedTok))
+        ) {
+            const censoredExpected =
+                typeof expectedTok === 'string' && expectedTok.length
+                    ? `${expectedTok.slice(0, 6)}...${expectedTok.slice(-6)}`
+                    : '(unset)';
+            console.verbose.warn(`NUI Auth Failed: token mismatch (expected '${censoredExpected}').`);
             return failResp('Unauthorized: token value');
         }
 

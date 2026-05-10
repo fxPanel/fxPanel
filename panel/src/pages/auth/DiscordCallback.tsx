@@ -46,11 +46,5 @@ export default function DiscordCallback() {
         submitCallback();
     }, []);
 
-    if (errorData) {
-        return <AuthError error={errorData} />;
-    } else if (isFetching) {
-        return <GenericSpinner msg="Logging in..." />;
-    } else {
-        return <GenericSpinner />;
-    }
+    return errorData ? <AuthError error={errorData} /> : isFetching ? <GenericSpinner msg="Logging in..." /> : <GenericSpinner />;
 }

@@ -27,7 +27,7 @@ export function createAddon() {
         delete globalThis.__TX_PENDING_ADDON__;
     }
 
-    const addonId = (pending && pending.addonId) || process.env.ADDON_ID;
+    const addonId = (pending && typeof pending === 'object' && pending.addonId) || process.env.ADDON_ID;
     if (!addonId) {
         throw new Error('@fxpanel/addon-sdk: ADDON_ID environment variable not set. Is this running inside fxPanel?');
     }

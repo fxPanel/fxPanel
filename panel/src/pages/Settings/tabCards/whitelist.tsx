@@ -12,6 +12,7 @@ import {
     getPageConfig,
     configsReducer,
     getConfigDiff,
+    reconcileCardPendingSave,
 } from '../utils';
 import { AutosizeTextarea, AutosizeTextAreaRef } from '@/components/ui/autosize-textarea';
 import SettingsCardShell from '../SettingsCardShell';
@@ -46,10 +47,13 @@ export default function ConfigCardWhitelist({ cardCtx, pageCtx }: SettingsCardPr
         toUi: (args?: string[]) => (args ? args.join(', ') : ''),
         toCfg: (str?: string) =>
             str
-                ? str
-                      .split(/[,;]\s*/)
-                      .map((x) => x.trim())
-                      .filter((x) => x.length)
+                ? str.split(/[,;]\s*/).reduce<string[]>((values, value) => {
+                      const trimmedValue = value.trim();
+                      if (trimmedValue.length) {
+                          values.push(trimmedValue);
+                      }
+                      return values;
+                  }, [])
                 : [],
     };
 
@@ -65,7 +69,7 @@ export default function ConfigCardWhitelist({ cardCtx, pageCtx }: SettingsCardPr
         };
 
         const res = getConfigDiff(cfg, states, overwrites, false);
-        pageCtx.setCardPendingSave(res.hasChanges ? cardCtx : null);
+        pageCtx.setCardPendingSave(reconcileCardPendingSave(cardCtx, res.hasChanges));
         return res;
     };
 
@@ -99,9 +103,12 @@ export default function ConfigCardWhitelist({ cardCtx, pageCtx }: SettingsCardPr
             }
         }
         if (Array.isArray(localConfigs.whitelist?.discordRoles)) {
-            const invalidRoles = localConfigs.whitelist.discordRoles
-                .filter((x: string) => !consts.regexDiscordSnowflake.test(x))
-                .map((x: string) => `- \`${x.slice(0, 20)}\``);
+            const invalidRoles: string[] = [];
+            for (const roleId of localConfigs.whitelist.discordRoles) {
+                if (!consts.regexDiscordSnowflake.test(roleId)) {
+                    invalidRoles.push(`- \`${roleId.slice(0, 20)}\``);
+                }
+            }
             if (invalidRoles.length) {
                 return txToast.error({
                     title: 'Invalid Discord Role ID(s).',

@@ -70,7 +70,7 @@ const TimelineCard = memo(
             <Card className="overflow-hidden">
                 <div className="border-border/40 flex flex-col gap-2 border-b px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
                     <div className="flex min-w-0 items-center gap-3">
-                        <div className="bg-secondary/40 border-border/50 text-accent/80 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border [&>svg]:size-4">
+                        <div className="bg-secondary/40 border-border/50 text-accent/80 flex size-9 shrink-0 items-center justify-center rounded-lg border [&>svg]:size-4">
                             <DoorOpenIcon />
                         </div>
                         <div className="min-w-0 flex-1">
@@ -116,7 +116,7 @@ const TimelineCard = memo(
                 </div>
 
                 <div className="border-border/40 flex items-center gap-3 border-t border-b px-3 py-3 sm:px-4">
-                    <div className="bg-secondary/40 border-border/50 text-accent/80 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border [&>svg]:size-4">
+                    <div className="bg-secondary/40 border-border/50 text-accent/80 flex size-9 shrink-0 items-center justify-center rounded-lg border [&>svg]:size-4">
                         <DoorOpenIcon />
                     </div>
                     <div className="min-w-0 flex-1">

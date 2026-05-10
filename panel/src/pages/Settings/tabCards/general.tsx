@@ -9,6 +9,7 @@ import {
     getPageConfig,
     configsReducer,
     getConfigDiff,
+    reconcileCardPendingSave,
 } from '../utils';
 import SettingsCardShell from '../SettingsCardShell';
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -60,7 +61,7 @@ export default function ConfigCardGeneral({ cardCtx, pageCtx }: SettingsCardProp
         };
 
         const res = getConfigDiff(cfg, states, overwrites, false);
-        pageCtx.setCardPendingSave(res.hasChanges ? cardCtx : null);
+        pageCtx.setCardPendingSave(reconcileCardPendingSave(cardCtx, res.hasChanges));
         return res;
     };
 

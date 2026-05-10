@@ -103,7 +103,7 @@ export const getPublishVersion = (isOptional: boolean) => {
     try {
         if (!workflowRef) {
             if (isOptional) {
-                const txVersion = '0.3.0-Alpha-04';
+                const txVersion = '0.3.0-Alpha-06';
                 return {
                     txVersion,
                     isPreRelease: /beta|alpha|rc/i.test(txVersion),

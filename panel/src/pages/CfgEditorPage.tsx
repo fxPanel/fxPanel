@@ -4,7 +4,7 @@ import { txToast } from '@/components/TxToaster';
 import { Button } from '@/components/ui/button';
 import { Loader2Icon } from 'lucide-react';
 import useSWR from 'swr';
-import LazyMonacoEditor from '@/components/LazyMonacoEditor';
+import { LazyMonacoEditor } from '@/components/LazyMonacoEditor';
 import MarkdownProse from '@/components/MarkdownProse';
 
 type CfgDataResp = {
@@ -31,13 +31,23 @@ type CfgSaveResp = {
 
 const SELECT_CLASS = 'bg-secondary text-secondary-foreground rounded-md border px-3 py-1.5 text-sm';
 
+type EditorViewState = {
+    currentFile: string;
+    mainCfgName: string;
+    editorContent: string;
+    isLoadingFile: boolean;
+};
+
 export default function CfgEditorPage() {
     const editorRef = useRef<any>(null);
-    const [currentFile, setCurrentFile] = useState('');
-    const [mainCfgName, setMainCfgName] = useState('');
-    const [editorContent, setEditorContent] = useState('');
+    const [editorState, setEditorState] = useState<EditorViewState>({
+        currentFile: '',
+        mainCfgName: '',
+        editorContent: '',
+        isLoadingFile: false,
+    });
     const [isSaving, setIsSaving] = useState(false);
-    const [isLoadingFile, setIsLoadingFile] = useState(false);
+    const { currentFile, mainCfgName, editorContent, isLoadingFile } = editorState;
 
     const dataApi = useBackendApi<CfgDataResp>({
         method: 'GET',
@@ -77,36 +87,41 @@ export default function CfgEditorPage() {
     // Set initial content when data loads
     useEffect(() => {
         if (initialData?.rawFile !== undefined) {
-            setEditorContent(initialData.rawFile);
+            setEditorState((prev) => ({ ...prev, editorContent: initialData.rawFile }));
         }
     }, [initialData]);
 
     // Set current file and main name when file list loads
     useEffect(() => {
         if (filesData?.files?.length && filesData.mainCfg) {
-            setMainCfgName(filesData.mainCfg);
-            if (!currentFile) {
-                setCurrentFile(filesData.mainCfg);
-            }
+            setEditorState((prev) => ({
+                ...prev,
+                mainCfgName: filesData.mainCfg!,
+                currentFile: prev.currentFile || filesData.mainCfg!,
+            }));
         }
-    }, [filesData, currentFile]);
+    }, [filesData]);
 
     const handleFileChange = (fileName: string) => {
         if (!fileName || fileName === currentFile) return;
-        setIsLoadingFile(true);
+        setEditorState((prev) => ({ ...prev, isLoadingFile: true }));
         filesApi({
             queryParams: { file: fileName },
             success(d) {
-                setIsLoadingFile(false);
                 if (d.contents !== undefined && d.name) {
-                    setCurrentFile(d.name);
-                    setEditorContent(d.contents);
+                    setEditorState((prev) => ({
+                        ...prev,
+                        currentFile: d.name,
+                        editorContent: d.contents,
+                        isLoadingFile: false,
+                    }));
                 } else {
+                    setEditorState((prev) => ({ ...prev, isLoadingFile: false }));
                     txToast.error('Failed to load file.');
                 }
             },
             error() {
-                setIsLoadingFile(false);
+                setEditorState((prev) => ({ ...prev, isLoadingFile: false }));
                 txToast.error('Failed to load file.');
             },
         });
@@ -160,7 +175,7 @@ export default function CfgEditorPage() {
     if (isLoading) {
         return (
             <div className="flex min-h-96 items-center justify-center">
-                <Loader2Icon className="h-8 w-8 animate-spin" />
+                <Loader2Icon className="size-8 animate-spin" />
             </div>
         );
     }
@@ -210,7 +225,7 @@ export default function CfgEditorPage() {
                         <option key={f} value={f}>
                             {f}
                         </option>
-                    )) ?? <option value="">Loading...</option>}
+                    )) ?? <option value="">Loading…</option>}
                 </select>
                 <small className="text-muted-foreground whitespace-nowrap">{fileHint}</small>
             </div>
@@ -222,7 +237,9 @@ export default function CfgEditorPage() {
                         height="100%"
                         language="ini"
                         value={editorContent}
-                        onChange={(value) => setEditorContent(value ?? '')}
+                        onChange={(value) =>
+                            setEditorState((prev) => ({ ...prev, editorContent: value ?? '' }))
+                        }
                         onMount={(editor) => {
                             editorRef.current = editor;
                         }}
@@ -240,7 +257,7 @@ export default function CfgEditorPage() {
             {/* Save Button */}
             <div className="shrink-0 pb-2 text-center">
                 <Button variant="outline" size="sm" disabled={isSaving} onClick={handleSave}>
-                    {isSaving && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
+                    {isSaving && <Loader2Icon className="mr-2 size-4 animate-spin" />}
                     Save File (⌘+S/Ctrl+S)
                 </Button>
             </div>

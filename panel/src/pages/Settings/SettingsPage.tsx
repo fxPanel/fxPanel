@@ -77,7 +77,7 @@ export type SettingTabsDatum = SettingTabMulti | SettingTabSingle;
 
 //Massaging the data into the expected format
 const nameToId = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-export const settingsTabs: SettingTabsDatum[] = settingsTabsBase.map((tab) => {
+const settingsTabs: SettingTabsDatum[] = settingsTabsBase.map((tab) => {
     const tabCtx = {
         tabId: nameToId(tab.name),
         tabName: tab.name,
@@ -137,13 +137,21 @@ export default function SettingsPage() {
     useEffect(() => {
         const onHashChange = () => {
             const hash = window.location.hash.slice(1);
+            let nextTab: string | null = null;
+
             if (hash === 'danger-zone' && hasPermRef.current('master')) {
-                setTab(hash);
+                nextTab = hash;
             } else if (hash.startsWith('addon-')) {
-                setTab(hash);
+                nextTab = hash;
             } else {
                 const match = settingsTabs.find((t) => t.ctx.tabId === hash);
-                if (match) setTab(match.ctx.tabId);
+                if (match) {
+                    nextTab = match.ctx.tabId;
+                }
+            }
+
+            if (nextTab) {
+                setTab(nextTab);
             }
         };
         window.addEventListener('hashchange', onHashChange);
@@ -284,7 +292,7 @@ export default function SettingsPage() {
                         ))}
                         {hasPerm('master') && (
                             <TabsTrigger value="danger-zone" className="hover:text-destructive text-destructive/70">
-                                <ShieldAlertIcon className="mr-1 h-3.5 w-3.5" />
+                                <ShieldAlertIcon className="mr-1 size-3.5" />
                                 Danger Zone
                             </TabsTrigger>
                         )}

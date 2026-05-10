@@ -169,8 +169,10 @@ export const registerTermLineMarker = (term: Terminal, markerData: TerminalMarke
             //Adding to the DOM
             updateWidth();
             element.classList.add('rounded');
-            element.style.backgroundColor = bgNormal;
-            element.style.width = '100%';
+            Object.assign(element.style, {
+                backgroundColor: bgNormal,
+                width: '100%',
+            });
             element.replaceChildren(btn);
         });
     // marker.onDispose(() => {});

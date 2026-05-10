@@ -41,21 +41,18 @@ export default function PlayerActivityTab({ player, serverTime }: PlayerActivity
         //Build hourly map from session history (UTC keys)
         const utcHourlyMap = new Map<string, number>();
         for (const [key, mins] of history) {
-            if (key.includes('T')) {
-                utcHourlyMap.set(key, (utcHourlyMap.get(key) ?? 0) + mins);
-            } else {
-                const legacyKey = `${key}T12`;
-                utcHourlyMap.set(legacyKey, (utcHourlyMap.get(legacyKey) ?? 0) + mins);
-            }
+            const [datePart, hourPart] = key.split('T');
+            const normalizedKey = hourPart ? key : `${datePart}T12`;
+            utcHourlyMap.set(normalizedKey, (utcHourlyMap.get(normalizedKey) ?? 0) + mins);
         }
 
         //Re-key UTC hours to local (system) time
         const hourlyMap = new Map<string, number>();
         for (const [key, mins] of utcHourlyMap) {
-            if (!key.includes('T')) continue;
             const [datePart, hourPart] = key.split('T');
+            if (!hourPart) continue;
             const [y, m, d] = datePart.split('-').map(Number);
-            const utcDate = new Date(Date.UTC(y, m - 1, d, parseInt(hourPart)));
+            const utcDate = new Date(Date.UTC(y, m - 1, d, parseInt(hourPart, 10)));
             const localKey = `${utcDate.getFullYear()}-${String(utcDate.getMonth() + 1).padStart(2, '0')}-${String(utcDate.getDate()).padStart(2, '0')}T${String(utcDate.getHours()).padStart(2, '0')}`;
             hourlyMap.set(localKey, (hourlyMap.get(localKey) ?? 0) + mins);
         }
@@ -81,8 +78,9 @@ export default function PlayerActivityTab({ player, serverTime }: PlayerActivity
         const hourTotals = new Array(24).fill(0);
         const hourDayCounts = new Array(24).fill(0);
         for (const [key, mins] of hourlyMap) {
-            if (!key.includes('T')) continue;
-            const hour = parseInt(key.split('T')[1]);
+            const [, hourPart] = key.split('T');
+            if (!hourPart) continue;
+            const hour = parseInt(hourPart, 10);
             if (!isNaN(hour)) {
                 hourTotals[hour] += mins;
                 hourDayCounts[hour]++;
@@ -91,12 +89,17 @@ export default function PlayerActivityTab({ player, serverTime }: PlayerActivity
 
         //Find top 3 peak hours by total minutes
         const peakHoursList = hourTotals
-            .map((total, hour) => ({
-                hour,
-                total,
-                avgMins: hourDayCounts[hour] ? Math.round(total / hourDayCounts[hour]) : 0,
-            }))
-            .filter((h) => h.total > 0)
+            .reduce<{ hour: number; total: number; avgMins: number }[]>((hours, total, hour) => {
+                if (total > 0) {
+                    hours.push({
+                        hour,
+                        total,
+                        avgMins: hourDayCounts[hour] ? Math.round(total / hourDayCounts[hour]) : 0,
+                    });
+                }
+
+                return hours;
+            }, [])
             .sort((a, b) => b.total - a.total)
             .slice(0, 3);
 
@@ -112,6 +115,13 @@ export default function PlayerActivityTab({ player, serverTime }: PlayerActivity
             avgDailyMinutes: avgDaily,
         };
     }, [player.sessionHistory, serverTime]);
+
+    const firstDayPadding = useMemo(() => {
+        if (!dayGrid.length) return [] as string[];
+
+        const firstDow = new Date(`${dayGrid[0].date}T00:00:00Z`).getUTCDay();
+        return Array.from({ length: firstDow }, (_, dayOffset) => `pad-${dayOffset}`);
+    }, [dayGrid]);
 
     if (!player.sessionHistory?.length) {
         return (
@@ -186,11 +196,9 @@ export default function PlayerActivityTab({ player, serverTime }: PlayerActivity
                         </div>
                     ))}
                     {/* Pad first week to align with day of week */}
-                    {dayGrid.length > 0 &&
-                        (() => {
-                            const firstDow = new Date(dayGrid[0].date + 'T00:00:00').getDay();
-                            return Array.from({ length: firstDow }, (_, i) => <div key={`pad-${i}`} />);
-                        })()}
+                    {firstDayPadding.map((padKey) => (
+                        <div key={padKey} />
+                    ))}
                     {dayGrid.map((day) => (
                         <div
                             key={day.date}
@@ -204,11 +212,11 @@ export default function PlayerActivityTab({ player, serverTime }: PlayerActivity
                 </div>
                 <div className="mt-1.5 flex items-center justify-end gap-1 text-[10px]">
                     <span className="text-muted-foreground">Less</span>
-                    <div className={cn('h-2.5 w-2.5 rounded-sm', 'bg-secondary/40')} />
-                    <div className={cn('h-2.5 w-2.5 rounded-sm', 'bg-emerald-900/60')} />
-                    <div className={cn('h-2.5 w-2.5 rounded-sm', 'bg-emerald-700/70')} />
-                    <div className={cn('h-2.5 w-2.5 rounded-sm', 'bg-emerald-500/80')} />
-                    <div className={cn('h-2.5 w-2.5 rounded-sm', 'bg-emerald-400')} />
+                    <div className={cn('size-2.5 rounded-sm', 'bg-secondary/40')} />
+                    <div className={cn('size-2.5 rounded-sm', 'bg-emerald-900/60')} />
+                    <div className={cn('size-2.5 rounded-sm', 'bg-emerald-700/70')} />
+                    <div className={cn('size-2.5 rounded-sm', 'bg-emerald-500/80')} />
+                    <div className={cn('size-2.5 rounded-sm', 'bg-emerald-400')} />
                     <span className="text-muted-foreground">More</span>
                 </div>
             </div>
@@ -220,13 +228,13 @@ export default function PlayerActivityTab({ player, serverTime }: PlayerActivity
                         Today&apos;s Hourly Breakdown
                     </div>
                     <div className="grid grid-cols-12 gap-0.5">
-                        {dayGrid.at(-1)!.hours.map((mins, h) => (
+                        {Array.from(dayGrid.at(-1)!.hours.entries()).map(([hour, mins]) => (
                             <div
-                                key={h}
+                                key={`hour-${hour}`}
                                 className={cn('flex flex-col items-center rounded-sm py-0.5', getIntensityClass(mins))}
-                                title={`${formatHour(h)}: ${mins}m`}
+                                title={`${formatHour(hour)}: ${mins}m`}
                             >
-                                <span className="text-[8px] leading-none opacity-70">{String(h).padStart(2, '0')}</span>
+                                <span className="text-[8px] leading-none opacity-70">{String(hour).padStart(2, '0')}</span>
                             </div>
                         ))}
                     </div>

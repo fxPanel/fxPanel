@@ -98,7 +98,7 @@ function useInsightData<T extends object>(path: string, devMockSelector: (mock: 
 function CardLoading() {
     return (
         <div className="flex items-center justify-center py-12">
-            <Loader2Icon className="text-muted-foreground h-6 w-6 animate-spin" />
+            <Loader2Icon className="text-muted-foreground size-6 animate-spin" />
         </div>
     );
 }
@@ -129,7 +129,7 @@ function InsightsCard({ icon, title, subtitle, action, className, children }: In
         <Card className={cn('overflow-hidden', className)}>
             <div className="border-border/40 flex flex-col gap-2 border-b px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
                 <div className="flex min-w-0 items-center gap-3">
-                    <div className="bg-secondary/40 border-border/50 text-accent/80 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border [&>svg]:size-4">
+                    <div className="bg-secondary/40 border-border/50 text-accent/80 flex size-9 shrink-0 items-center justify-center rounded-lg border [&>svg]:size-4">
                         {icon}
                     </div>
                     <div className="min-w-0 flex-1">

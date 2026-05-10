@@ -275,7 +275,7 @@ export default async function SendDiagnosticsReport(ctx: AuthedCtx) {
         },
     };
 
-    //Making HTTP Request
+    // Making HTTP request — URL is fixed (no user-controlled SSRF surface here).
     try {
         type ResponseType = { reportId: string } | { error: string; message?: string };
         const apiResp = (await got.post('https://fxapi.fxpanel.org/api/diagnostics', requestOptions).json()) as ResponseType;

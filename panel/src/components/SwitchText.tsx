@@ -1,7 +1,6 @@
 import { cn } from '@/lib/utils';
 import { Switch } from './ui/switch';
 import { cva, VariantProps } from 'class-variance-authority';
-import { forwardRef } from 'react';
 
 const switchVariants = cva('peer', {
     variants: {
@@ -29,21 +28,19 @@ type SwitchTextProps = Omit<Parameters<typeof Switch>[0], 'children'> & {
     variant?: VariantProps<typeof switchVariants>['variant'];
 };
 
-const SwitchText = forwardRef<React.ElementRef<typeof Switch>, SwitchTextProps>(
-    ({ id, checkedLabel, uncheckedLabel, variant, className, ...props }, ref) => {
-        return (
-            <div className="flex items-center space-x-2">
-                <Switch id={id} className={cn(className, switchVariants({ variant }))} ref={ref} {...props} />
-                <div className="text-muted-foreground hidden text-sm leading-none font-medium tracking-wide select-none peer-data-[state=checked]:inline">
-                    {checkedLabel}
-                </div>
-                <div className="text-muted-foreground hidden text-sm leading-none font-medium tracking-wide select-none peer-data-[state=unchecked]:inline">
-                    {uncheckedLabel}
-                </div>
+const SwitchText = ({ id, checkedLabel, uncheckedLabel, variant, className, ref, ...props }: SwitchTextProps) => {
+    return (
+        <div className="flex items-center gap-x-2">
+            <Switch id={id} className={cn(className, switchVariants({ variant }))} ref={ref} {...props} />
+            <div className="text-muted-foreground hidden text-sm leading-none font-medium tracking-wide select-none peer-data-[state=checked]:inline">
+                {checkedLabel}
             </div>
-        );
-    },
-);
+            <div className="text-muted-foreground hidden text-sm leading-none font-medium tracking-wide select-none peer-data-[state=unchecked]:inline">
+                {uncheckedLabel}
+            </div>
+        </div>
+    );
+};
 
 SwitchText.displayName = 'SwitchText';
 

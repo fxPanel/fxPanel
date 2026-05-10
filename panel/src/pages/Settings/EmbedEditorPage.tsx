@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LazyMonacoEditor } from '@/components/LazyMonacoEditor';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -79,8 +79,7 @@ const playerTemplatePlaceholderDescriptions: Record<string, string> = {
 export default function EmbedEditorPage() {
     const editorState = useAtomValue(embedEditorAtom);
     const setEditorState = useSetAtom(embedEditorAtom);
-    const [config, setConfig] = useState('');
-    const [error, setError] = useState<string | null>(null);
+    const [config, setConfig] = useState(() => (editorState ? beautifyJson(editorState.initialValue) : ''));
     const [isPanelOpen, setIsPanelOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -90,15 +89,6 @@ export default function EmbedEditorPage() {
         throwGenericErrors: true,
     });
 
-    // Initialize editor content once on mount, so subsequent atom updates
-    // don't clobber unsaved edits.
-    useEffect(() => {
-        if (editorState) {
-            setConfig(beautifyJson(editorState.initialValue));
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     // Redirect if no state
     useEffect(() => {
         if (!editorState) {
@@ -106,13 +96,12 @@ export default function EmbedEditorPage() {
         }
     }, [editorState]);
 
-    // Validate JSON on change
-    useEffect(() => {
+    const error = useMemo(() => {
         try {
             jsonForgivingParse(config);
-            setError(null);
+            return null;
         } catch (e) {
-            setError('Invalid JSON: ' + emsg(e));
+            return 'Invalid JSON: ' + emsg(e);
         }
     }, [config]);
 
@@ -144,10 +133,10 @@ export default function EmbedEditorPage() {
             if (!resp) throw new Error('empty_response');
             if (resp.type === 'error') return;
             // Update the atom with the saved value so going back reflects changes
-            setEditorState({
-                ...editorState,
+            setEditorState((prev) => ({
+                ...prev,
                 initialValue: config,
-            });
+            }));
             navigate('/settings#discord');
         } catch (error) {
             txToast.error(
@@ -192,9 +181,9 @@ export default function EmbedEditorPage() {
                         >
                             {isPanelOpen ? 'Hide Placeholders' : 'Show Placeholders'}
                             {isPanelOpen ? (
-                                <PanelRightCloseIcon className="ml-2 h-4 w-4" />
+                                <PanelRightCloseIcon className="ml-2 size-4" />
                             ) : (
-                                <PanelRightOpenIcon className="ml-2 h-4 w-4" />
+                                <PanelRightOpenIcon className="ml-2 size-4" />
                             )}
                         </Button>
                     </div>
@@ -284,20 +273,20 @@ export default function EmbedEditorPage() {
                         </Button>
                         <div className="flex gap-2">
                             <Button variant="outline" onClick={() => setConfig(beautifyJson(editorState.initialValue))}>
-                                <XIcon className="mr-2 h-4 w-4" /> Discard Changes
+                                <XIcon className="mr-2 size-4" /> Discard Changes
                             </Button>
                             <Button
                                 variant="outline"
                                 className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
                                 onClick={() => setConfig(beautifyJson(editorState.defaultValue))}
                             >
-                                <RotateCcw className="mr-2 h-4 w-4" /> Reset to Default
+                                <RotateCcw className="mr-2 size-4" /> Reset to Default
                             </Button>
                             <Button onClick={handleSave} disabled={!!error || isSaving}>
                                 {isSaving ? (
-                                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                                    <Loader2Icon className="mr-2 size-4 animate-spin" />
                                 ) : (
-                                    <Save className="mr-2 h-4 w-4" />
+                                    <Save className="mr-2 size-4" />
                                 )}
                                 Save Changes
                             </Button>

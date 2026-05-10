@@ -1,47 +1,81 @@
 import { Button } from '@/components/ui/button';
 import { getSocket, joinSocketRoom, leaveSocketRoom } from '@/lib/utils';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 
 const BUFFER_TRIM_SIZE = 128 * 1024; // 128kb
 
+type TmpSocketState = {
+    consoleData: string;
+    isOffline: boolean;
+};
+
+type TmpSocketAction =
+    | { type: 'appendConsoleData'; incomingData: string }
+    | { type: 'setOffline'; isOffline: boolean }
+    | { type: 'clearTerminal' };
+
+function reduceTmpSocketState(state: TmpSocketState, action: TmpSocketAction): TmpSocketState {
+    switch (action.type) {
+        case 'appendConsoleData': {
+            console.log(state.consoleData.length, action.incomingData.length);
+            let consoleData = state.consoleData + action.incomingData;
+            consoleData =
+                consoleData.length > BUFFER_TRIM_SIZE
+                    ? consoleData.slice(-0.5 * BUFFER_TRIM_SIZE)
+                    : consoleData;
+            consoleData = consoleData.substring(consoleData.indexOf('\n'));
+            return {
+                ...state,
+                consoleData,
+            };
+        }
+        case 'setOffline':
+            return {
+                ...state,
+                isOffline: action.isOffline,
+            };
+        case 'clearTerminal':
+            return {
+                ...state,
+                consoleData: '[cleared]',
+            };
+        default:
+            return state;
+    }
+}
+
 export default function TmpSocket() {
     const socketRef = useRef<Socket | null>(null);
-    const [consoleData, setConsoleData] = useState('[empty]');
-    const [isOffline, setIsOffline] = useState(true);
+    const [state, dispatch] = useReducer(reduceTmpSocketState, {
+        consoleData: '[empty]',
+        isOffline: true,
+    });
+    const { consoleData, isOffline } = state;
 
     const ingestConsoleData = (incomingData: string) => {
-        setConsoleData((currData) => {
-            console.log(currData.length, incomingData.length);
-            let _consoleData = currData + incomingData;
-            _consoleData =
-                _consoleData.length > BUFFER_TRIM_SIZE
-                    ? _consoleData.slice(-0.5 * BUFFER_TRIM_SIZE) // grab the last half
-                    : _consoleData; // no need to trim
-            _consoleData = _consoleData.substring(_consoleData.indexOf('\n'));
-            return _consoleData;
-        });
+        dispatch({ type: 'appendConsoleData', incomingData });
     };
 
     const sendPing = () => {
         socketRef.current?.emit('consoleCommand', 'txaPing');
     };
     const clearTerminal = () => {
-        setConsoleData('[cleared]');
+        dispatch({ type: 'clearTerminal' });
     };
 
     useEffect(() => {
         const socket = getSocket();
         socketRef.current = socket;
-        setIsOffline(!socket.connected);
+        dispatch({ type: 'setOffline', isOffline: !socket.connected });
 
         const connectHandler = () => {
             console.log('Console Socket.IO Connected.');
-            setIsOffline(false);
+            dispatch({ type: 'setOffline', isOffline: false });
         };
         const disconnectHandler = (message: string) => {
             console.log('Console Socket.IO Disconnected:', message);
-            setIsOffline(true);
+            dispatch({ type: 'setOffline', isOffline: true });
         };
         const errorHandler = (reason?: string) => {
             console.log('Console Socket.IO', reason ?? 'unknown');

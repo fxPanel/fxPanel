@@ -15,11 +15,9 @@ import {
     TrophyIcon,
     XCircleIcon,
 } from 'lucide-react';
-import type { ApiGetAnalyticsResp } from '@shared/ticketApiTypes';
-import { useSetPageTitle } from '@/hooks/pages';
+import type { ApiGetAnalyticsResp, TicketAnalyticsSummary } from '@shared/ticketApiTypes';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/page-header';
-import { useEffect } from 'react';
 
 function msToHuman(ms: number) {
     if (!Number.isFinite(ms)) return '—';
@@ -46,8 +44,8 @@ function StatCard({
     return (
         <Card>
             <CardContent className="flex items-center gap-4 p-4">
-                <div className="bg-muted flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
-                    <Icon className={`h-5 w-5 ${iconClass ?? 'text-muted-foreground'}`} />
+                <div className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg">
+                    <Icon className={`size-5 ${iconClass ?? 'text-muted-foreground'}`} />
                 </div>
                 <div>
                     <p className="text-muted-foreground text-xs">{label}</p>
@@ -58,12 +56,54 @@ function StatCard({
     );
 }
 
-export default function AnalyticsPage() {
-    const setPageTitle = useSetPageTitle();
-    useEffect(() => {
-        setPageTitle('Report Analytics');
-    }, [setPageTitle]);
+function StaffLeaderboard({ leaderboard }: { leaderboard: TicketAnalyticsSummary['leaderboard'] }) {
+    if (leaderboard.length === 0) return null;
 
+    return (
+        <Card>
+            <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                    <TrophyIcon className="size-4" /> Staff Leaderboard (Last 30 Days)
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="overflow-hidden rounded-lg border">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="bg-secondary/30">
+                                <th className="px-3 py-2 text-left font-medium">#</th>
+                                <th className="px-3 py-2 text-left font-medium">Admin</th>
+                                <th className="px-3 py-2 text-right font-medium">Resolved</th>
+                                <th className="px-3 py-2 text-right font-medium">Avg Resolution</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {leaderboard.map((row, i) => (
+                                <tr
+                                    key={`${row.adminName}-${row.resolved}-${row.avgResolutionMs}`}
+                                    className={i % 2 === 0 ? '' : 'bg-secondary/10'}
+                                >
+                                    <td className="text-muted-foreground px-3 py-2">
+                                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                                    </td>
+                                    <td className="px-3 py-2 font-medium">{row.adminName}</td>
+                                    <td className="px-3 py-2 text-right">
+                                        <Badge variant="secondary">{row.resolved}</Badge>
+                                    </td>
+                                    <td className="text-muted-foreground px-3 py-2 text-right">
+                                        {msToHuman(row.avgResolutionMs)}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+export default function AnalyticsPage() {
     const api = useBackendApi<ApiGetAnalyticsResp>({ method: 'GET', path: '/reports/analytics' });
     const { data, isLoading, error } = useSWR('/reports/analytics', () => api({}), {
         revalidateOnFocus: false,
@@ -73,7 +113,7 @@ export default function AnalyticsPage() {
     if (isLoading) {
         return (
             <div className="flex h-64 items-center justify-center">
-                <Loader2Icon className="text-muted-foreground h-6 w-6 animate-spin" />
+                <Loader2Icon className="text-muted-foreground size-6 animate-spin" />
             </div>
         );
     }
@@ -224,7 +264,7 @@ export default function AnalyticsPage() {
                                 <Card>
                                     <CardHeader className="pb-2">
                                         <CardTitle className="flex items-center gap-2 text-base">
-                                            <TagIcon className="h-4 w-4" /> By Category
+                                            <TagIcon className="size-4" /> By Category
                                         </CardTitle>
                                     </CardHeader>
                                     <CardContent>
@@ -275,7 +315,7 @@ export default function AnalyticsPage() {
                         <Card>
                             <CardHeader className="pb-2">
                                 <CardTitle className="flex items-center gap-2 text-base">
-                                    <TrendingUpIcon className="h-4 w-4" /> Staff Metrics
+                                    <TrendingUpIcon className="size-4" /> Staff Metrics
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
@@ -305,7 +345,7 @@ export default function AnalyticsPage() {
                                             <div key={row.label}>
                                                 <div className="mb-1 flex items-center justify-between text-sm">
                                                     <div className="flex items-center gap-1.5">
-                                                        <span className={`inline-block h-2 w-2 rounded-full ${row.colorClass}`} />
+                                                        <span className={`inline-block size-2 rounded-full ${row.colorClass}`} />
                                                         <span>{row.label}</span>
                                                     </div>
                                                     <span className="text-muted-foreground">
@@ -323,43 +363,7 @@ export default function AnalyticsPage() {
                         </Card>
                     </div>
 
-                    {leaderboard.length > 0 && (
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="flex items-center gap-2 text-base">
-                                    <TrophyIcon className="h-4 w-4" /> Staff Leaderboard (Last 30 Days)
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="overflow-hidden rounded-lg border">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="bg-secondary/30">
-                                                <th className="px-3 py-2 text-left font-medium">#</th>
-                                                <th className="px-3 py-2 text-left font-medium">Admin</th>
-                                                <th className="px-3 py-2 text-right font-medium">Resolved</th>
-                                                <th className="px-3 py-2 text-right font-medium">Avg Resolution</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {leaderboard.map((row, i) => (
-                                                <tr key={`${row.adminName}-${i}`} className={i % 2 === 0 ? '' : 'bg-secondary/10'}>
-                                                    <td className="text-muted-foreground px-3 py-2">
-                                                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
-                                                    </td>
-                                                    <td className="px-3 py-2 font-medium">{row.adminName}</td>
-                                                    <td className="px-3 py-2 text-right">
-                                                        <Badge variant="secondary">{row.resolved}</Badge>
-                                                    </td>
-                                                    <td className="text-muted-foreground px-3 py-2 text-right">{msToHuman(row.avgResolutionMs)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
+                    <StaffLeaderboard leaderboard={leaderboard} />
                 </div>
             </div>
         </div>

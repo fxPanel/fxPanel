@@ -67,6 +67,8 @@ const configChangeLogFieldDefinitions = [
     ['gameFeatures.newplayerThreshold', 'New Player Tag Threshold (minutes)'],
     ['gameFeatures.customTags', 'Custom Player Tags'],
     ['webServer.disableNuiSourceCheck', 'Disable NUI Source Check'],
+    ['webServer.trustProxy', 'Trust Reverse Proxy (X-Forwarded-*)'],
+    ['webServer.proxyTrustedHops', 'Proxy Trusted Hops (X-Forwarded-For Tail)'],
     ['webServer.limiterMinutes', 'Rate Limiter Minutes'],
     ['webServer.limiterAttempts', 'Rate Limiter Attempts'],
     ['webServer.useSecureCookies', 'Use Secure Cookies'],

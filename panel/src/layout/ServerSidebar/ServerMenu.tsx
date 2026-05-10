@@ -17,8 +17,23 @@ import {
     HourglassIcon,
     LayoutDashboardIcon,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer } from 'react';
 import { useLocation } from 'wouter';
+
+type PendingConfigureLinkState = {
+    linkHref: string;
+    linkText: string;
+};
+
+function reducePendingConfigureLinkState(
+    state: PendingConfigureLinkState,
+    action: Partial<PendingConfigureLinkState>,
+): PendingConfigureLinkState {
+    return {
+        ...state,
+        ...action,
+    };
+}
 
 //Separate component to prevent re-render of the entire menu
 function ServerName() {
@@ -31,30 +46,34 @@ type PendingServerConfigureProps = {
 
 function PendingServerConfigure({ txConfigState }: PendingServerConfigureProps) {
     const [currLocation] = useLocation();
-    const [linkHref, setLinkHref] = useState('');
-    const linkText = useRef('');
+    const [state, dispatch] = useReducer(reducePendingConfigureLinkState, {
+        linkHref: '',
+        linkText: '',
+    });
+    const { linkHref, linkText } = state;
     const refreshContent = useContentRefresh();
 
     //This effect is done to prevent the link from popping up in the delay between ui change
     // and the pendingStep state atom being updated from the socket.io event
     useEffect(() => {
         let newHref = '';
+        let newLinkText = '';
         if (txConfigState === TxConfigState.Setup && !currLocation.startsWith('/server/setup')) {
             newHref = '/server/setup';
-            linkText.current = 'Go to the setup page!';
+            newLinkText = 'Go to the setup page!';
         } else if (txConfigState === TxConfigState.Deployer && !currLocation.startsWith('/server/deployer')) {
             newHref = '/server/deployer';
-            linkText.current = 'Go to the deployer page!';
+            newLinkText = 'Go to the deployer page!';
         } else {
             newHref = '';
         }
 
         if (!newHref) {
-            setLinkHref('');
+            dispatch({ linkHref: '', linkText: newLinkText });
             return;
         } else {
             const timeout = setTimeout(() => {
-                setLinkHref(newHref);
+                dispatch({ linkHref: newHref, linkText: newLinkText });
             }, 500);
             return () => clearTimeout(timeout);
         }
@@ -62,19 +81,17 @@ function PendingServerConfigure({ txConfigState }: PendingServerConfigureProps) 
 
     return (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-            <HourglassIcon className="h-12 w-12 animate-pulse opacity-75" />
+            <HourglassIcon className="size-12 animate-pulse opacity-75" />
             <p className="text-center text-lg font-light tracking-wider opacity-75">
                 You need to configure your server to be able to start it.
             </p>
             {linkHref ? (
-                <span onClick={() => refreshContent()}>
-                    <TxAnchor href={linkHref} className="animate-toastbar-enter">
-                        {linkText.current}
-                    </TxAnchor>
-                </span>
+                <TxAnchor href={linkHref} className="animate-toastbar-enter" onClick={() => refreshContent()}>
+                    {linkText}
+                </TxAnchor>
             ) : (
                 <TxAnchor href="#" className="animate-toastbar-leave pointer-events-none">
-                    {linkText.current || <>&nbsp;</>}
+                    {linkText || <>&nbsp;</>}
                 </TxAnchor>
             )}
         </div>
@@ -97,28 +114,28 @@ export default function ServerMenu() {
                 </h2>
                 <div className="space-y-1 select-none">
                     <MenuNavLink href="/">
-                        <LayoutDashboardIcon className="mr-2 h-4 w-4" />
+                        <LayoutDashboardIcon className="mr-2 size-4" />
                         Dashboard
                     </MenuNavLink>
                     <MenuNavLink href="/server/console" disabled={!hasPerm('console.view')}>
-                        <ChevronRightSquareIcon className="mr-2 h-4 w-4" />
+                        <ChevronRightSquareIcon className="mr-2 size-4" />
                         Live Console
                     </MenuNavLink>
                     <MenuNavLink href="/server/resources">
-                        <BoxIcon className="mr-2 h-4 w-4" />
+                        <BoxIcon className="mr-2 size-4" />
                         Resources
                     </MenuNavLink>
                     <MenuNavLink href="/server/server-log" disabled={!hasPerm('server.log.view')}>
-                        <EyeIcon className="mr-2 h-4 w-4" />
+                        <EyeIcon className="mr-2 size-4" />
                         Server Log
                     </MenuNavLink>
                     <MenuNavLink href="/server/cfg-editor" disabled={!hasPerm('server.cfg.editor')}>
-                        <FileEditIcon className="mr-2 h-4 w-4" />
+                        <FileEditIcon className="mr-2 size-4" />
                         CFG Editor
                     </MenuNavLink>
                     {window.txConsts.showAdvanced && (
                         <MenuNavLink href="/advanced" className="text-accent" disabled={!hasPerm('all_permisisons')}>
-                            <DnaIcon className="mr-2 h-4 w-4" />
+                            <DnaIcon className="mr-2 size-4" />
                             Advanced
                         </MenuNavLink>
                     )}
@@ -131,7 +148,7 @@ export default function ServerMenu() {
                                     href={page.path}
                                     disabled={page.permission ? !hasPerm(page.permission) : false}
                                 >
-                                    <BlocksIcon className="mr-2 h-4 w-4" />
+                                    <BlocksIcon className="mr-2 size-4" />
                                     {page.title}
                                 </MenuNavLink>
                             ))}
@@ -139,7 +156,7 @@ export default function ServerMenu() {
                     )}
                     {import.meta.env.DEV && (
                         <MenuNavLink href="/test" className="text-accent">
-                            <DnaIcon className="mr-2 h-4 w-4" />
+                            <DnaIcon className="mr-2 size-4" />
                             Test
                         </MenuNavLink>
                     )}

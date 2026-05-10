@@ -224,7 +224,7 @@ function SortableTableHeader({ label, sortKey, sortingState, setSorting, classNa
         >
             <div className="flex items-center gap-1">
                 {label}
-                <SortIcon className={cn('h-3 w-3', isSorted ? 'text-accent' : 'opacity-40')} />
+                <SortIcon className={cn('size-3', isSorted ? 'text-accent' : 'opacity-40')} />
             </div>
         </th>
     );

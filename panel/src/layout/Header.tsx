@@ -29,7 +29,7 @@ function ServerIdentity() {
     return (
         <div className="flex min-w-0 items-center gap-2.5">
             <span
-                className={cn('relative flex h-2 w-2 shrink-0 items-center justify-center')}
+                className={cn('relative flex size-2 shrink-0 items-center justify-center')}
                 title={isOnline ? 'Server online' : 'Server offline'}
             >
                 {isOnline && (
@@ -37,7 +37,7 @@ function ServerIdentity() {
                 )}
                 <span
                     className={cn(
-                        'relative inline-flex h-1.5 w-1.5 rounded-full',
+                        'relative inline-flex size-1.5 rounded-full',
                         isOnline ? 'bg-success' : 'bg-muted-foreground/40',
                     )}
                 />
@@ -47,7 +47,7 @@ function ServerIdentity() {
                     {serverName || 'fxPanel'}
                 </h1>
                 <p className="text-muted-foreground/70 flex items-center gap-1 truncate text-[11px]">
-                    <CircleIcon aria-hidden="true" className="h-1.5 w-1.5 fill-current opacity-60" />
+                    <CircleIcon aria-hidden="true" className="size-1.5 fill-current opacity-60" />
                     <span className="font-mono font-medium">{playerCount}</span>
                     <span className="opacity-70">{playerCount === 1 ? 'player' : 'players'}</span>
                 </p>
@@ -71,7 +71,7 @@ function IconButton({ label, icon, badge, onClick }: IconButtonProps) {
             title={label}
             aria-label={label}
             onClick={onClick}
-            className="text-muted-foreground hover:text-foreground hover:bg-secondary/60 border-border/50 bg-secondary/30 focus-visible:ring-ring ring-offset-background relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden [&>svg]:size-4"
+            className="text-muted-foreground hover:text-foreground hover:bg-secondary/60 border-border/50 bg-secondary/30 focus-visible:ring-ring ring-offset-background relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden [&>svg]:size-4"
         >
             {icon}
             {badge ? (
@@ -93,12 +93,12 @@ function AuthedHeaderFragment() {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger
-                className="focus-visible:ring-ring ring-offset-background inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:brightness-110 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden"
+                className="focus-visible:ring-ring ring-offset-background inline-flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:brightness-110 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden"
                 title="Account"
                 aria-label="Account"
             >
                 <Avatar
-                    className="border-border/50 h-8 w-8 rounded-md border text-xs"
+                    className="border-border/50 size-8 rounded-md border text-xs"
                     username={authData.name}
                     profilePicture={authData.profilePicture}
                 />
@@ -109,7 +109,7 @@ function AuthedHeaderFragment() {
                     <p className="text-muted-foreground/70 mt-0.5 text-xs">Signed in</p>
                 </div>
                 <DropdownMenuItem className="cursor-pointer" onClick={() => setAccountModalOpen(true)}>
-                    <KeyRoundIcon className="mr-2 h-4 w-4" />
+                    <KeyRoundIcon className="mr-2 size-4" />
                     Your Account
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -123,7 +123,7 @@ function AuthedHeaderFragment() {
                     <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="cursor-pointer" onClick={logout}>
-                            <LogOutIcon className="mr-2 h-4 w-4" />
+                            <LogOutIcon className="mr-2 size-4" />
                             Logout
                         </DropdownMenuItem>
                     </>

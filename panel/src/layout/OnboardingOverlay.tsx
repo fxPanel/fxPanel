@@ -1,18 +1,88 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { useLocation } from 'wouter';
 import SetupPage from '@/pages/SetupPage';
 import DeployerPage from '@/pages/DeployerPage';
 import { LogoFullSquareGreen } from '@/components/Logos';
-import { cn } from '@/lib/utils';
 
 const ONBOARDING_PATTERN = /^\/server\/(setup|deployer)(\/|$)/;
 
 type OnboardingSlug = 'setup' | 'deployer';
 type Phase = 'idle' | 'entering' | 'shown' | 'exiting';
 
+type OverlayState = {
+    phase: Phase;
+    stickySlug: OnboardingSlug | null;
+    panelIn: boolean;
+    fading: boolean;
+};
+
+type OverlayAction =
+    | { type: 'syncMatched'; slug: OnboardingSlug }
+    | { type: 'panelIn' }
+    | { type: 'panelShown' }
+    | { type: 'startExit' }
+    | { type: 'finishExit' };
+
 function matchOnboarding(path: string): OnboardingSlug | null {
     const m = ONBOARDING_PATTERN.exec(path);
     return m ? (m[1] as OnboardingSlug) : null;
+}
+
+function createInitialState(matched: OnboardingSlug | null, skipSlide: boolean): OverlayState {
+    return {
+        phase: matched ? (skipSlide ? 'shown' : 'entering') : 'idle',
+        stickySlug: matched,
+        panelIn: skipSlide,
+        fading: false,
+    };
+}
+
+function overlayReducer(state: OverlayState, action: OverlayAction): OverlayState {
+    switch (action.type) {
+        case 'syncMatched':
+            if (state.phase === 'idle' || state.phase === 'exiting') {
+                return {
+                    ...state,
+                    phase: 'entering',
+                    stickySlug: action.slug,
+                    panelIn: false,
+                    fading: false,
+                };
+            }
+
+            return {
+                ...state,
+                stickySlug: action.slug,
+                fading: false,
+            };
+        case 'panelIn':
+            return {
+                ...state,
+                panelIn: true,
+            };
+        case 'panelShown':
+            if (state.phase !== 'entering' || !state.panelIn) return state;
+            return {
+                ...state,
+                phase: 'shown',
+            };
+        case 'startExit':
+            if (state.phase === 'idle') return state;
+            return {
+                ...state,
+                phase: 'exiting',
+                fading: true,
+            };
+        case 'finishExit':
+            return {
+                phase: 'idle',
+                stickySlug: null,
+                panelIn: false,
+                fading: false,
+            };
+        default:
+            return state;
+    }
 }
 
 export default function OnboardingOverlay() {
@@ -23,14 +93,8 @@ export default function OnboardingOverlay() {
     const skipSlide = useRef(sessionStorage.getItem('fxp_onboarding_instant') === '1');
     if (skipSlide.current) sessionStorage.removeItem('fxp_onboarding_instant');
 
-    const initialPhase: Phase = matched ? (skipSlide.current ? 'shown' : 'entering') : 'idle';
-    const [phase, setPhase] = useState<Phase>(initialPhase);
-    const [stickySlug, setStickySlug] = useState<OnboardingSlug | null>(matched);
-
-    // CSS-transition-driven slide. Two separate pieces of state so the
-    // background layer and the panel layer can animate independently.
-    const [panelIn, setPanelIn] = useState(skipSlide.current); // skip if flagged
-    const [fading, setFading] = useState(false);
+    const [state, dispatch] = useReducer(overlayReducer, createInitialState(matched, skipSlide.current));
+    const { phase, stickySlug, panelIn, fading } = state;
 
     const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const panelTriggeredRef = useRef(skipSlide.current);
@@ -42,7 +106,7 @@ export default function OnboardingOverlay() {
         // Double rAF: ensures the browser paints the initial off-screen
         // position BEFORE we flip panelIn, so the transition actually runs.
         requestAnimationFrame(() => {
-            requestAnimationFrame(() => setPanelIn(true));
+            requestAnimationFrame(() => dispatch({ type: 'panelIn' }));
         });
     }, [phase]);
 
@@ -52,23 +116,16 @@ export default function OnboardingOverlay() {
                 clearTimeout(exitTimerRef.current);
                 exitTimerRef.current = null;
             }
-            setStickySlug(matched);
-            setFading(false);
             if (phase === 'idle' || phase === 'exiting') {
                 panelTriggeredRef.current = false;
-                setPanelIn(false);
-                setPhase('entering');
             }
+            dispatch({ type: 'syncMatched', slug: matched });
         } else if (phase !== 'idle') {
-            setFading(true);
+            dispatch({ type: 'startExit' });
             exitTimerRef.current = setTimeout(() => {
-                setPhase('idle');
-                setStickySlug(null);
-                setPanelIn(false);
-                setFading(false);
                 panelTriggeredRef.current = false;
+                dispatch({ type: 'finishExit' });
             }, 320);
-            setPhase('exiting');
         }
         return () => {
             if (exitTimerRef.current) {
@@ -101,7 +158,7 @@ export default function OnboardingOverlay() {
                     boxShadow: '-32px 0 80px rgba(0,0,0,0.45)',
                 }}
                 onTransitionEnd={() => {
-                    if (phase === 'entering' && panelIn) setPhase('shown');
+                    if (phase === 'entering' && panelIn) dispatch({ type: 'panelShown' });
                 }}
             >
                 {/* Header bar — always visible once panel arrives */}

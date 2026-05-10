@@ -19,7 +19,7 @@ export const fxRunnerStateAtom = atom(
  * Clock drift in seconds (serverTime - clientTime).
  * Positive means server clock is ahead of client.
  */
-export const clockDriftAtom = atom((get) => {
+const clockDriftAtom = atom((get) => {
     const serverTime = get(globalStatusAtom)?.serverTime;
     if (!serverTime) return 0;
     return serverTime - Math.round(Date.now() / 1000);

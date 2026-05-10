@@ -43,8 +43,8 @@ function StatusBadge({ children, tooltip, type }: StatusBadgeProps) {
 
     return (
         <Tooltip>
-            <TooltipTrigger asChild>
-                <span className={statusBadgeVariants({ type })}>{children}</span>
+            <TooltipTrigger type="button" className={statusBadgeVariants({ type })}>
+                {children}
             </TooltipTrigger>
             <TooltipContent side="right">
                 {typeof tooltip === 'string' ? (

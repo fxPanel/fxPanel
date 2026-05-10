@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { useBackendApi } from '@/hooks/fetch';
 import { useAdminPerms } from '@/hooks/auth';
@@ -69,7 +69,7 @@ function Pagination({
     return (
         <div className="flex items-center justify-center gap-2 pt-2">
             <Button variant="outline" size="xs" onClick={() => onPageChange(currPage - 1)} disabled={currPage <= 1}>
-                <ChevronLeftIcon className="h-4 w-4" />
+                <ChevronLeftIcon className="size-4" />
             </Button>
             <span className="text-muted-foreground text-sm">
                 Page {currPage} of {totalPages}
@@ -80,7 +80,7 @@ function Pagination({
                 onClick={() => onPageChange(currPage + 1)}
                 disabled={currPage >= totalPages}
             >
-                <ChevronRightIcon className="h-4 w-4" />
+                <ChevronRightIcon className="size-4" />
             </Button>
         </div>
     );
@@ -91,9 +91,10 @@ function WhitelistedPlayersTab() {
     const [page, setPage] = useState(1);
     const debouncedSearch = useDebouncedValue(search, 300);
 
-    useEffect(() => {
+    const handleSearchChange = (value: string) => {
+        setSearch(value);
         setPage(1);
-    }, [debouncedSearch]);
+    };
 
     const listApi = useBackendApi<ApiWhitelistPlayersResp>({
         method: 'GET',
@@ -122,11 +123,11 @@ function WhitelistedPlayersTab() {
         <div className="space-y-4">
             <div className="flex items-center gap-2">
                 <div className="relative grow">
-                    <SearchIcon className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                    <SearchIcon className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
                     <Input
                         placeholder="Search by name, identifier, or staff..."
                         value={search}
-                        onChange={(e) => setSearch(e.target.value)}
+                        onChange={(e) => handleSearchChange(e.target.value)}
                         className="pl-9"
                     />
                 </div>
@@ -141,11 +142,11 @@ function WhitelistedPlayersTab() {
 
             {swr.isLoading ? (
                 <div className="flex justify-center py-8">
-                    <Loader2Icon className="text-muted-foreground h-6 w-6 animate-spin" />
+                    <Loader2Icon className="text-muted-foreground size-6 animate-spin" />
                 </div>
             ) : !resp || resp.players.length === 0 ? (
                 <div className="text-muted-foreground py-8 text-center">
-                    <UsersIcon className="mx-auto mb-2 h-8 w-8 opacity-50" />
+                    <UsersIcon className="mx-auto mb-2 size-8 opacity-50" />
                     <p>{debouncedSearch ? 'No players match your search.' : 'No whitelisted players found.'}</p>
                 </div>
             ) : (
@@ -228,18 +229,18 @@ function WhitelistedPlayerRow({ player, onRemoved }: { player: WhitelistEntry; o
                 {tsToLocaleDateTimeString(player.tsApproved, 'short', 'short')}
             </td>
             <td className="px-4 py-2.5 text-right">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={copyIdentifier} title="Copy ID">
-                    <CopyIcon className="h-3.5 w-3.5" />
+                <Button variant="ghost" size="icon" className="size-7" onClick={copyIdentifier} title="Copy ID">
+                    <CopyIcon className="size-3.5" />
                 </Button>
                 {canManage && (
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="text-destructive hover:text-destructive h-7 w-7"
+                        className="text-destructive hover:text-destructive size-7"
                         onClick={handleRemove}
                         title="Remove whitelist"
                     >
-                        <Trash2Icon className="h-3.5 w-3.5" />
+                        <Trash2Icon className="size-3.5" />
                     </Button>
                 )}
             </td>
@@ -255,9 +256,10 @@ function RequestsTab() {
     const debouncedSearch = useDebouncedValue(search, 300);
     const openConfirmDialog = useOpenConfirmDialog();
 
-    useEffect(() => {
+    const handleSearchChange = (value: string) => {
+        setSearch(value);
         setPage(1);
-    }, [debouncedSearch]);
+    };
 
     const listApi = useBackendApi<WhitelistRequestsResp>({
         method: 'GET',
@@ -333,11 +335,11 @@ function RequestsTab() {
         <div className="space-y-4">
             <div className="flex items-center gap-2">
                 <div className="relative grow">
-                    <SearchIcon className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                    <SearchIcon className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
                     <Input
                         placeholder="Search by ID, name, or Discord tag..."
                         value={search}
-                        onChange={(e) => setSearch(e.target.value)}
+                        onChange={(e) => handleSearchChange(e.target.value)}
                         className="pl-9"
                     />
                 </div>
@@ -357,11 +359,11 @@ function RequestsTab() {
 
             {swr.isLoading ? (
                 <div className="flex justify-center py-8">
-                    <Loader2Icon className="text-muted-foreground h-6 w-6 animate-spin" />
+                    <Loader2Icon className="text-muted-foreground size-6 animate-spin" />
                 </div>
             ) : !resp || resp.requests.length === 0 ? (
                 <div className="text-muted-foreground py-8 text-center">
-                    <ClockIcon className="mx-auto mb-2 h-8 w-8 opacity-50" />
+                    <ClockIcon className="mx-auto mb-2 size-8 opacity-50" />
                     <p>{debouncedSearch ? 'No requests match your search.' : 'No pending whitelist requests.'}</p>
                 </div>
             ) : (
@@ -404,7 +406,7 @@ function RequestsTab() {
                                                         className="text-success-inline hover:bg-success/10"
                                                         onClick={() => approveRequest(req.id)}
                                                     >
-                                                        <CheckCircle2Icon className="mr-1 h-3.5 w-3.5" />
+                                                        <CheckCircle2Icon className="mr-1 size-3.5" />
                                                         Approve
                                                     </Button>
                                                     <Button
@@ -413,7 +415,7 @@ function RequestsTab() {
                                                         className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                                         onClick={() => denyRequest(req.id)}
                                                     >
-                                                        <XIcon className="mr-1 h-3.5 w-3.5" />
+                                                        <XIcon className="mr-1 size-3.5" />
                                                         Deny
                                                     </Button>
                                                 </div>
@@ -510,7 +512,7 @@ function ApprovalsTab() {
         <div className="space-y-4">
             <div className="flex items-center gap-2">
                 <div className="relative grow">
-                    <SearchIcon className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                    <SearchIcon className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
                     <Input
                         placeholder="Search by name, identifier, or staff..."
                         value={search}
@@ -535,7 +537,7 @@ function ApprovalsTab() {
                         className="max-w-sm"
                     />
                     <Button size="sm" onClick={addApproval} disabled={isAdding || !addIdentifier.trim()}>
-                        <PlusIcon className="mr-1 h-4 w-4" />
+                        <PlusIcon className="mr-1 size-4" />
                         Add
                     </Button>
                 </div>
@@ -543,11 +545,11 @@ function ApprovalsTab() {
 
             {swr.isLoading ? (
                 <div className="flex justify-center py-8">
-                    <Loader2Icon className="text-muted-foreground h-6 w-6 animate-spin" />
+                    <Loader2Icon className="text-muted-foreground size-6 animate-spin" />
                 </div>
             ) : filtered.length === 0 ? (
                 <div className="text-muted-foreground py-8 text-center">
-                    <ShieldCheckIcon className="mx-auto mb-2 h-8 w-8 opacity-50" />
+                    <ShieldCheckIcon className="mx-auto mb-2 size-8 opacity-50" />
                     <p>{search ? 'No approvals match your search.' : 'No pending approvals.'}</p>
                 </div>
             ) : (
@@ -586,11 +588,11 @@ function ApprovalsTab() {
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 w-7"
+                                                    className="text-destructive hover:text-destructive hover:bg-destructive/10 size-7"
                                                     onClick={() => removeApproval(a.identifier)}
                                                     title="Remove"
                                                 >
-                                                    <Trash2Icon className="h-3.5 w-3.5" />
+                                                    <Trash2Icon className="size-3.5" />
                                                 </Button>
                                             </td>
                                         )}
@@ -613,15 +615,15 @@ export default function WhitelistPage() {
             <Tabs defaultValue="players" className="flex min-h-0 flex-1 flex-col">
                 <TabsList>
                     <TabsTrigger value="players" className="gap-1.5">
-                        <UsersIcon className="h-3.5 w-3.5" />
+                        <UsersIcon className="size-3.5" />
                         Whitelisted Players
                     </TabsTrigger>
                     <TabsTrigger value="requests" className="gap-1.5">
-                        <ClockIcon className="h-3.5 w-3.5" />
+                        <ClockIcon className="size-3.5" />
                         Requests
                     </TabsTrigger>
                     <TabsTrigger value="approvals" className="gap-1.5">
-                        <UserCheckIcon className="h-3.5 w-3.5" />
+                        <UserCheckIcon className="size-3.5" />
                         Pending Approvals
                     </TabsTrigger>
                 </TabsList>

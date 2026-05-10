@@ -15,10 +15,10 @@ export default function LiveConsoleHeader({
 }: LiveConsoleHeaderProps) {
     return (
         <div className="border-border/40 flex shrink flex-col border-b px-1 py-2.5 sm:px-4">
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-x-2">
                 <svg
                     aria-hidden="true"
-                    className="text-success h-3.5 w-3.5"
+                    className="text-success size-3.5"
                     fill="none"
                     height="24"
                     stroke="currentColor"
@@ -34,7 +34,7 @@ export default function LiveConsoleHeader({
                 </svg>
                 <p className="text-foreground font-mono text-sm font-medium">Live Console</p>
                 <span
-                    className={`ml-1 h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-success' : 'bg-muted-foreground/40'}`}
+                    className={`ml-1 size-1.5 rounded-full ${isConnected ? 'bg-success' : 'bg-muted-foreground/40'}`}
                 >
                     <span className="sr-only">{isConnected ? 'Connected' : 'Disconnected'}</span>
                 </span>
@@ -46,7 +46,7 @@ export default function LiveConsoleHeader({
                             onClick={onJumpToLastStart}
                             title="Jump to last server start"
                         >
-                            <RocketIcon className="h-3 w-3" />
+                            <RocketIcon className="size-3" />
                             <span className="hidden sm:inline">Last Start</span>
                         </button>
                         <button
@@ -54,7 +54,7 @@ export default function LiveConsoleHeader({
                             onClick={onJumpToPrevStart}
                             title="Jump to previous server start"
                         >
-                            <SkipBackIcon className="h-3 w-3" />
+                            <SkipBackIcon className="size-3" />
                             <span className="hidden sm:inline">Prev Start</span>
                         </button>
                     </div>

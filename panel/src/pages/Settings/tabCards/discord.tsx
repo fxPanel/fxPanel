@@ -17,6 +17,7 @@ import {
     getPageConfig,
     configsReducer,
     getConfigDiff,
+    reconcileCardPendingSave,
 } from '../utils';
 import SettingsCardShell from '../SettingsCardShell';
 import { txToast } from '@/components/TxToaster';
@@ -85,11 +86,15 @@ const generateUuid = () => {
 };
 
 const normalizeRoleIdsInput = (value: string) => {
-    const roleIds = value
-        .split(/[\n,;\s]+/)
-        .map((token) => token.trim())
-        .filter((token) => token.length)
-        .map((token) => token.match(/\d{17,20}/)?.[0] ?? token);
+    const roleIds = value.split(/[\n,;\s]+/).reduce<string[]>((ids, rawToken) => {
+        const token = rawToken.trim();
+        if (!token.length) {
+            return ids;
+        }
+
+        ids.push(token.match(/\d{17,20}/)?.[0] ?? token);
+        return ids;
+    }, []);
 
     return [...new Set(roleIds)];
 };
@@ -126,19 +131,38 @@ const resolveRolePermissionMappings = (value: unknown) => {
         return [] as RolePermissionMapping[];
     }
 
-    return value
-        .filter((entry): entry is Partial<RolePermissionMapping> => !!entry && typeof entry === 'object')
-        .map((entry) => ({
-            id: typeof entry.id === 'string' && entry.id.length ? entry.id : generateUuid(),
-            label: typeof entry.label === 'string' ? entry.label : '',
-            discordRoleIds: Array.isArray(entry.discordRoleIds)
-                ? [...new Set(entry.discordRoleIds.filter((roleId): roleId is string => typeof roleId === 'string'))]
-                : [],
+    return value.reduce<RolePermissionMapping[]>((mappings, entry) => {
+        if (!entry || typeof entry !== 'object') {
+            return mappings;
+        }
+
+        const mappingEntry = entry as {
+            id?: unknown;
+            label?: unknown;
+            discordRoleIds?: unknown;
+            permissionPresetId?: unknown;
+        };
+        const discordRoleIds = Array.isArray(mappingEntry.discordRoleIds)
+            ? mappingEntry.discordRoleIds.reduce<string[]>((roleIds, roleId) => {
+                  if (typeof roleId === 'string') {
+                      roleIds.push(roleId);
+                  }
+                  return roleIds;
+              }, [])
+            : [];
+
+        mappings.push({
+            id: typeof mappingEntry.id === 'string' && mappingEntry.id.length ? mappingEntry.id : generateUuid(),
+            label: typeof mappingEntry.label === 'string' ? mappingEntry.label : '',
+            discordRoleIds: [...new Set(discordRoleIds)],
             permissionPresetId:
-                typeof entry.permissionPresetId === 'string' && entry.permissionPresetId.length
-                    ? entry.permissionPresetId
+                typeof mappingEntry.permissionPresetId === 'string' && mappingEntry.permissionPresetId.length
+                    ? mappingEntry.permissionPresetId
                     : null,
-        }));
+        });
+
+        return mappings;
+    }, []);
 };
 
 const resolvePresenceConfig = (value: unknown): PresenceConfig => {
@@ -152,7 +176,7 @@ const resolvePresenceConfig = (value: unknown): PresenceConfig => {
     };
 };
 
-export const pageConfigs = {
+const pageConfigs = {
     botEnabled: getPageConfig('discordBot', 'enabled', undefined, false),
     botToken: getPageConfig('discordBot', 'token'),
     discordGuild: getPageConfig('discordBot', 'guild'),
@@ -160,7 +184,7 @@ export const pageConfigs = {
     rolePermissions: getPageConfig('discordBot', 'rolePermissions', undefined, [] as RolePermissionMapping[]),
 } as const;
 
-export default function ConfigCardDiscord({ cardCtx, pageCtx }: SettingsCardProps) {
+function useConfigCardDiscord({ cardCtx, pageCtx }: SettingsCardProps) {
     const [states, dispatch] = useReducer(configsReducer<typeof pageConfigs>, null, () =>
         getConfigEmptyState(pageConfigs),
     );
@@ -262,7 +286,7 @@ export default function ConfigCardDiscord({ cardCtx, pageCtx }: SettingsCardProp
         };
 
         const res = getConfigDiff(cfg, states, overwrites, false);
-        pageCtx.setCardPendingSave(res.hasChanges ? cardCtx : null);
+        pageCtx.setCardPendingSave(reconcileCardPendingSave(cardCtx, res.hasChanges));
         return res;
     };
 
@@ -532,12 +556,12 @@ export default function ConfigCardDiscord({ cardCtx, pageCtx }: SettingsCardProp
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        className="text-destructive-inline h-9 w-9 shrink-0"
+                                        className="text-destructive-inline size-9 shrink-0"
                                         onClick={() => removeRolePermission(mapping.id)}
                                         disabled={pageCtx.isReadOnly}
                                         aria-label="Remove mapping"
                                     >
-                                        <TrashIcon className="h-4 w-4" />
+                                        <TrashIcon className="size-4" />
                                     </Button>
                                 </div>
 
@@ -617,7 +641,7 @@ export default function ConfigCardDiscord({ cardCtx, pageCtx }: SettingsCardProp
                     )}
 
                     <Button variant="outline" size="sm" onClick={addRolePermission} disabled={pageCtx.isReadOnly}>
-                        <PlusIcon className="mr-1 h-4 w-4" /> Add Mapping
+                        <PlusIcon className="mr-1 size-4" /> Add Mapping
                     </Button>
                 </div>
                 <SettingItemDesc>
@@ -726,4 +750,8 @@ export default function ConfigCardDiscord({ cardCtx, pageCtx }: SettingsCardProp
             </SettingItem>
         </SettingsCardShell>
     );
+}
+
+export default function ConfigCardDiscord(props: SettingsCardProps) {
+    return useConfigCardDiscord(props);
 }

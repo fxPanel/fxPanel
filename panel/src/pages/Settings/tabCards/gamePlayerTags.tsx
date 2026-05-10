@@ -9,6 +9,7 @@ import {
     getPageConfig,
     configsReducer,
     getConfigDiff,
+    reconcileCardPendingSave,
 } from '../utils';
 import SettingsCardShell from '../SettingsCardShell';
 import { PlusIcon, TrashIcon } from 'lucide-react';
@@ -22,6 +23,8 @@ type CustomTagEntry = {
     priority: number;
     enabled?: boolean;
 };
+
+const autoTagDefinitionsById = new Map(AUTO_TAG_DEFINITIONS.map((definition) => [definition.id, definition] as const));
 
 const AUTO_TAG_IDS = new Set(AUTO_TAG_DEFINITIONS.map((t) => t.id));
 
@@ -62,7 +65,7 @@ const buildMergedTags = (stored: CustomTagEntry[]): CustomTagEntry[] => {
 const extractStoredTags = (merged: CustomTagEntry[]): CustomTagEntry[] => {
     const result: CustomTagEntry[] = [];
     for (const tag of merged) {
-        const autoDef = AUTO_TAG_DEFINITIONS.find((a) => a.id === tag.id);
+        const autoDef = autoTagDefinitionsById.get(tag.id);
         if (autoDef) {
             const isChanged =
                 tag.color !== autoDef.color ||
@@ -107,7 +110,7 @@ export default function ConfigCardGamePlayerTags({ cardCtx, pageCtx }: SettingsC
         }
 
         const res = getConfigDiff(cfg, states, overwrites, false);
-        pageCtx.setCardPendingSave(res.hasChanges ? cardCtx : null);
+        pageCtx.setCardPendingSave(reconcileCardPendingSave(cardCtx, res.hasChanges));
         return res;
     };
 
@@ -165,15 +168,19 @@ export default function ConfigCardGamePlayerTags({ cardCtx, pageCtx }: SettingsC
                     {mergedTags.map((tag, i) => {
                         const isAutoTag = AUTO_TAG_IDS.has(tag.id);
                         const isDisabled = isAutoTag && tag.enabled === false;
+                        const tagKey = isAutoTag ? tag.id : `custom-${i}`;
                         return (
                             <div
-                                key={isAutoTag ? tag.id : `custom-${i}`}
+                                key={tagKey}
                                 className={`flex flex-wrap items-end gap-2 rounded-md border p-3 ${isDisabled ? 'opacity-50' : ''}`}
                                 style={{ borderColor: tag.color ? `${tag.color}40` : undefined }}
                             >
                                 <div className="w-32 space-y-1">
-                                    <label className="text-muted-foreground text-xs">ID</label>
+                                    <label className="text-muted-foreground text-xs" htmlFor={`${tagKey}-id`}>
+                                        ID
+                                    </label>
                                     <Input
+                                        id={`${tagKey}-id`}
                                         value={tag.id}
                                         onChange={(e) =>
                                             updateMergedTag(
@@ -188,8 +195,11 @@ export default function ConfigCardGamePlayerTags({ cardCtx, pageCtx }: SettingsC
                                     />
                                 </div>
                                 <div className="w-32 space-y-1">
-                                    <label className="text-muted-foreground text-xs">Label</label>
+                                    <label className="text-muted-foreground text-xs" htmlFor={`${tagKey}-label`}>
+                                        Label
+                                    </label>
                                     <Input
+                                        id={`${tagKey}-label`}
                                         value={tag.label}
                                         onChange={(e) => updateMergedTag(i, 'label', e.target.value)}
                                         placeholder="Streamer"
@@ -198,21 +208,27 @@ export default function ConfigCardGamePlayerTags({ cardCtx, pageCtx }: SettingsC
                                     />
                                 </div>
                                 <div className="w-20 space-y-1">
-                                    <label className="text-muted-foreground text-xs">Color</label>
+                                    <label className="text-muted-foreground text-xs" htmlFor={`${tagKey}-color`}>
+                                        Color
+                                    </label>
                                     <div className="flex items-center gap-1">
                                         <input
+                                            id={`${tagKey}-color`}
                                             type="color"
                                             value={tag.color}
                                             onChange={(e) => updateMergedTag(i, 'color', e.target.value)}
                                             disabled={pageCtx.isReadOnly}
-                                            className="h-9 w-9 cursor-pointer rounded border-0 bg-transparent p-0"
+                                            className="size-9 cursor-pointer rounded border-0 bg-transparent p-0"
                                         />
                                         <span className="text-muted-foreground font-mono text-xs">{tag.color}</span>
                                     </div>
                                 </div>
                                 <div className="w-20 space-y-1">
-                                    <label className="text-muted-foreground text-xs">Priority</label>
+                                    <label className="text-muted-foreground text-xs" htmlFor={`${tagKey}-priority`}>
+                                        Priority
+                                    </label>
                                     <Input
+                                        id={`${tagKey}-priority`}
                                         type="number"
                                         min={1}
                                         max={999}
@@ -238,11 +254,11 @@ export default function ConfigCardGamePlayerTags({ cardCtx, pageCtx }: SettingsC
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        className="text-destructive-inline h-9 w-9 shrink-0"
+                                        className="text-destructive-inline size-9 shrink-0"
                                         onClick={() => removeTag(i)}
                                         disabled={pageCtx.isReadOnly}
                                     >
-                                        <TrashIcon className="h-4 w-4" />
+                                        <TrashIcon className="size-4" />
                                     </Button>
                                 )}
                                 {isAutoTag && AUTO_TAG_DESCRIPTIONS[tag.id] && (
@@ -259,7 +275,7 @@ export default function ConfigCardGamePlayerTags({ cardCtx, pageCtx }: SettingsC
                         onClick={addTag}
                         disabled={pageCtx.isReadOnly || customCount >= 20}
                     >
-                        <PlusIcon className="mr-1 h-4 w-4" />
+                        <PlusIcon className="mr-1 size-4" />
                         Add Tag
                     </Button>
                 </div>

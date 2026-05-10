@@ -1,7 +1,7 @@
 import { atom, useSetAtom } from 'jotai';
 import { atomEffect } from 'jotai-effect';
 import type { ReactNode } from 'react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import faviconDefault from '/favicon_default.svg?url';
 import { globalStatusAtom } from './status';
 import { playerCountAtom } from './playerlist';
@@ -59,7 +59,7 @@ const pageTitleAtom = atom(DEFAULT_TITLE);
 
 export const useSetPageTitle = () => {
     const setPageTitle = useSetAtom(pageTitleAtom);
-    return (title?: string) => {
+    return useCallback((title?: string) => {
         if (title) {
             setPageTitle(title);
         } else {
@@ -68,7 +68,7 @@ export const useSetPageTitle = () => {
             document.title = DEFAULT_TITLE;
             faviconEl.href = faviconDefault;
         }
-    };
+    }, [setPageTitle]);
 };
 
 export const pageTitleWatcher: ReturnType<typeof atomEffect> = atomEffect((get, set) => {

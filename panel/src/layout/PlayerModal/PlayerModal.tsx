@@ -22,27 +22,27 @@ import { ErrorBoundary } from 'react-error-boundary';
 const modalTabs = [
     {
         title: 'Info',
-        icon: <InfoIcon className="xs:block mr-2 hidden h-5 w-5" />,
+        icon: <InfoIcon className="xs:block mr-2 hidden size-5" />,
     },
     {
         title: 'Insights',
-        icon: <SearchIcon className="xs:block mr-2 hidden h-5 w-5" />,
+        icon: <SearchIcon className="xs:block mr-2 hidden size-5" />,
     },
     {
         title: 'Activity',
-        icon: <ActivityIcon className="xs:block mr-2 hidden h-5 w-5" />,
+        icon: <ActivityIcon className="xs:block mr-2 hidden size-5" />,
     },
     {
         title: 'History',
-        icon: <HistoryIcon className="xs:block mr-2 hidden h-5 w-5" />,
+        icon: <HistoryIcon className="xs:block mr-2 hidden size-5" />,
     },
     {
         title: 'IDs',
-        icon: <ListIcon className="xs:block mr-2 hidden h-5 w-5" />,
+        icon: <ListIcon className="xs:block mr-2 hidden size-5" />,
     },
     {
         title: 'Ban',
-        icon: <GavelIcon className="xs:block mr-2 hidden h-5 w-5" />,
+        icon: <GavelIcon className="xs:block mr-2 hidden size-5" />,
         className: 'hover:bg-destructive hover:text-destructive-foreground',
     },
 ];
@@ -255,7 +255,7 @@ export default function PlayerModal() {
                                             onClick={() => setSelectedTab(tabEntry.value)}
                                             onKeyDown={handleTabButtonKeyDown}
                                         >
-                                            <BlocksIcon className="xs:block mr-2 hidden h-5 w-5" /> {w.title}
+                                            <BlocksIcon className="xs:block mr-2 hidden size-5" /> {w.title}
                                         </Button>
                                     );
                                 })}

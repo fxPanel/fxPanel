@@ -229,16 +229,58 @@ async function getAddonThemeInjection(
     return empty;
 }
 
-const getConfiguredRuntimeServerIcon = async () => {
+const MAX_INLINE_SERVER_ICON_BYTES = 100_000;
+const serverIconMimeMap: Record<string, string> = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+};
+
+const buildServerIconDataUrl = (buffer: Buffer, ext: string): string | undefined => {
+    const mime = serverIconMimeMap[ext.toLowerCase()];
+    if (!mime || buffer.length > MAX_INLINE_SERVER_ICON_BYTES) return undefined;
+    return `data:${mime};base64,${buffer.toString('base64')}`;
+};
+
+const runtimeIconFilenameRe = /^icon-[a-f0-9]{16}\.(png|jpe?g|gif|webp|svg|ico)$/i;
+
+const readRuntimeIconDataUrl = async (filename: string | undefined): Promise<string | undefined> => {
+    if (!filename || !runtimeIconFilenameRe.test(filename)) return undefined;
+    try {
+        const iconPath = path.join(txEnv.txaPath, '.runtime', filename);
+        const buf = await fsp.readFile(iconPath);
+        const ext = path.extname(filename).toLowerCase();
+        return buildServerIconDataUrl(buf, ext);
+    } catch {
+        return undefined;
+    }
+};
+
+type ServerIconInjection = {
+    filename: string | undefined;
+    dataUrl: string | undefined;
+};
+
+const getConfiguredRuntimeServerIcon = async (): Promise<ServerIconInjection> => {
     const cachedIconFilename = txCore.cacheStore.getTyped('fxsRuntime:iconFilename', isString);
     if (typeof txConfig.server.cfgPath !== 'string' || typeof txConfig.server.dataPath !== 'string') {
-        return cachedIconFilename;
+        return {
+            filename: cachedIconFilename,
+            dataUrl: await readRuntimeIconDataUrl(cachedIconFilename),
+        };
     }
 
     try {
         const configuredIconPath = await getConfiguredServerIconPath(txConfig.server.cfgPath, txConfig.server.dataPath);
         if (!configuredIconPath) {
-            return cachedIconFilename;
+            return {
+                filename: cachedIconFilename,
+                dataUrl: await readRuntimeIconDataUrl(cachedIconFilename),
+            };
         }
 
         const iconBuffer = await fsp.readFile(configuredIconPath);
@@ -246,7 +288,10 @@ const getConfiguredRuntimeServerIcon = async () => {
         const supportedIconExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico'];
         if (!supportedIconExts.includes(iconExt)) {
             console.verbose.warn(`Unsupported server icon format "${iconExt}" from ${configuredIconPath}`);
-            return cachedIconFilename;
+            return {
+                filename: cachedIconFilename,
+                dataUrl: await readRuntimeIconDataUrl(cachedIconFilename),
+            };
         }
         const iconHash = crypto
             .createHash('shake256', { outputLength: 8 })
@@ -264,14 +309,25 @@ const getConfiguredRuntimeServerIcon = async () => {
 
         if (cachedIconFilename !== iconFilename || !runtimeIconExists) {
             const saved = await setRuntimeFile(iconFilename, iconBuffer);
-            if (!saved) return cachedIconFilename;
+            if (!saved) {
+                return {
+                    filename: cachedIconFilename,
+                    dataUrl: await readRuntimeIconDataUrl(cachedIconFilename),
+                };
+            }
             txCore.cacheStore.set('fxsRuntime:iconFilename', iconFilename);
         }
 
-        return iconFilename;
+        return {
+            filename: iconFilename,
+            dataUrl: buildServerIconDataUrl(iconBuffer, iconExt),
+        };
     } catch (error) {
         console.verbose.warn(`Failed to load configured server icon: ${emsg(error)}`);
-        return cachedIconFilename;
+        return {
+            filename: cachedIconFilename,
+            dataUrl: await readRuntimeIconDataUrl(cachedIconFilename),
+        };
     }
 };
 
@@ -341,7 +397,8 @@ export default async function getReactIndex(ctx: CtxWithVars | AuthedCtx) {
         server: {
             name: txCore.cacheStore.getTyped('fxsRuntime:projectName', isString) ?? txConfig.general.serverName,
             game: txCore.cacheStore.getTyped('fxsRuntime:gameName', isString),
-            icon: serverIcon,
+            icon: serverIcon.filename,
+            iconDataUrl: serverIcon.dataUrl,
             desc: txCore.cacheStore.getTyped('fxsRuntime:projectDesc', isString),
         },
         hideFxsUpdateNotification: txConfig.general.hideFxsUpdateNotification,

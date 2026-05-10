@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
-import { createContext, useContext, useState } from 'react';
-import { useRoute } from 'wouter';
+import { createContext, use, useState } from 'react';
+import { useLocation, useRoute } from 'wouter';
 import MainPageLink from '@/components/MainPageLink';
 import { useAdminPerms, useAuth } from '@/hooks/auth';
 import { useShellBreakpoints } from '@/hooks/useShellBreakpoints';
@@ -63,7 +63,7 @@ import { KickAllIcon } from '@/components/KickIcons';
 
 // ─── Collapse context ─────────────────────────────────────────────────────────
 const SidebarCollapsedCtx = createContext(false);
-const useCollapsed = () => useContext(SidebarCollapsedCtx);
+const useCollapsed = () => use(SidebarCollapsedCtx);
 
 // ─── Sidebar nav item ────────────────────────────────────────────────────────
 type SidebarNavItemProps = {
@@ -75,21 +75,22 @@ type SidebarNavItemProps = {
 
 function SidebarNavItem({ href, icon: Icon, label, disabled }: SidebarNavItemProps) {
     const [isActive] = useRoute(href);
+    const [, navigate] = useLocation();
     const collapsed = useCollapsed();
 
     if (disabled) {
         return (
             <Tooltip>
-                <TooltipTrigger asChild>
-                    <div
-                        className={cn(
-                            'text-muted-foreground flex w-full cursor-not-allowed items-center rounded-md text-sm opacity-35 select-none',
-                            collapsed ? 'justify-center py-2' : 'gap-3 px-3 py-2',
-                        )}
-                    >
-                        <Icon className="h-4 w-4 shrink-0" />
-                        {!collapsed && <span>{label}</span>}
-                    </div>
+                <TooltipTrigger
+                    type="button"
+                    aria-disabled="true"
+                    className={cn(
+                        'text-muted-foreground flex w-full cursor-not-allowed items-center rounded-md text-sm opacity-35 select-none',
+                        collapsed ? 'justify-center py-2' : 'gap-3 px-3 py-2',
+                    )}
+                >
+                    <Icon className="size-4 shrink-0" />
+                    {!collapsed && <span>{label}</span>}
                 </TooltipTrigger>
                 <TooltipContent side="right" className="text-destructive-inline text-center">
                     {collapsed && <p className="mb-1 font-semibold">{label}</p>}
@@ -101,21 +102,25 @@ function SidebarNavItem({ href, icon: Icon, label, disabled }: SidebarNavItemPro
     }
 
     if (collapsed) {
+        const handleCollapsedClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+            if (event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+            event.preventDefault();
+            navigate(href);
+        };
+
         return (
             <Tooltip>
-                <TooltipTrigger asChild>
-                    <MainPageLink
-                        href={href}
-                        isActive={isActive}
-                        className={cn(
-                            'flex w-full justify-center rounded-md py-2 transition-colors',
-                            isActive
-                                ? 'bg-accent/10 text-accent'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40',
-                        )}
-                    >
-                        <Icon className="h-4 w-4 shrink-0" />
-                    </MainPageLink>
+                <TooltipTrigger
+                    type="button"
+                    onClick={handleCollapsedClick}
+                    className={cn(
+                        'flex w-full justify-center rounded-md py-2 transition-colors',
+                        isActive
+                            ? 'bg-accent/10 text-accent'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40',
+                    )}
+                >
+                    <Icon className="size-4 shrink-0" />
                 </TooltipTrigger>
                 <TooltipContent side="right">{label}</TooltipContent>
             </Tooltip>
@@ -133,9 +138,9 @@ function SidebarNavItem({ href, icon: Icon, label, disabled }: SidebarNavItemPro
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary/40',
             )}
         >
-            <Icon className="h-4 w-4 shrink-0" />
+            <Icon className="size-4 shrink-0" />
             <span className="flex-1 leading-none">{label}</span>
-            {isActive && <span className="bg-accent h-1.5 w-1.5 shrink-0 rounded-full" />}
+            {isActive && <span className="bg-accent size-1.5 shrink-0 rounded-full" />}
         </MainPageLink>
     );
 }
@@ -225,35 +230,29 @@ function SidebarServerControls() {
         return (
             <div className="flex flex-col items-center gap-1">
                 <Tooltip>
-                    <TooltipTrigger asChild>
-                        <button
-                            onClick={() => handleControl(isRunning ? 'stop' : 'start')}
-                            disabled={!hasControlPerm}
-                            className={cn(
-                                'flex h-8 w-8 items-center justify-center rounded-md border text-xs transition-colors disabled:pointer-events-none disabled:opacity-40',
-                                isRunning
-                                    ? 'border-destructive/40 bg-destructive/10 text-destructive-inline hover:bg-destructive/20'
-                                    : 'border-success/40 bg-success/10 text-success-inline hover:bg-success/20',
-                            )}
-                        >
-                            {isRunning ? (
-                                <PowerOffIcon className="h-3.5 w-3.5" />
-                            ) : (
-                                <PowerIcon className="h-3.5 w-3.5" />
-                            )}
-                        </button>
+                    <TooltipTrigger
+                        type="button"
+                        onClick={() => handleControl(isRunning ? 'stop' : 'start')}
+                        disabled={!hasControlPerm}
+                        className={cn(
+                            'flex size-8 items-center justify-center rounded-md border text-xs transition-colors disabled:pointer-events-none disabled:opacity-40',
+                            isRunning
+                                ? 'border-destructive/40 bg-destructive/10 text-destructive-inline hover:bg-destructive/20'
+                                : 'border-success/40 bg-success/10 text-success-inline hover:bg-success/20',
+                        )}
+                    >
+                        {isRunning ? <PowerOffIcon className="size-3.5" /> : <PowerIcon className="size-3.5" />}
                     </TooltipTrigger>
                     <TooltipContent side="right">{isRunning ? 'Stop server' : 'Start server'}</TooltipContent>
                 </Tooltip>
                 <Tooltip>
-                    <TooltipTrigger asChild>
-                        <button
-                            onClick={() => handleControl('restart')}
-                            disabled={!hasControlPerm || !isAlive}
-                            className="border-info/40 bg-info/10 text-info-inline hover:bg-info/20 flex h-8 w-8 items-center justify-center rounded-md border transition-colors disabled:pointer-events-none disabled:opacity-40"
-                        >
-                            <RotateCcwIcon className="h-3.5 w-3.5" />
-                        </button>
+                    <TooltipTrigger
+                        type="button"
+                        onClick={() => handleControl('restart')}
+                        disabled={!hasControlPerm || !isAlive}
+                        className="border-info/40 bg-info/10 text-info-inline hover:bg-info/20 flex size-8 items-center justify-center rounded-md border transition-colors disabled:pointer-events-none disabled:opacity-40"
+                    >
+                        <RotateCcwIcon className="size-3.5" />
                     </TooltipTrigger>
                     <TooltipContent side="right">Restart server</TooltipContent>
                 </Tooltip>
@@ -274,7 +273,7 @@ function SidebarServerControls() {
                 )}
                 title={isRunning ? 'Stop server' : 'Start server'}
             >
-                {isRunning ? <PowerOffIcon className="h-3.5 w-3.5" /> : <PowerIcon className="h-3.5 w-3.5" />}
+                {isRunning ? <PowerOffIcon className="size-3.5" /> : <PowerIcon className="size-3.5" />}
                 {isRunning ? 'Stop' : 'Start'}
             </button>
 
@@ -284,7 +283,7 @@ function SidebarServerControls() {
                 className="border-info/40 bg-info/10 text-info-inline hover:bg-info/20 flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md border text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40"
                 title="Restart server"
             >
-                <RotateCcwIcon className="h-3.5 w-3.5" />
+                <RotateCcwIcon className="size-3.5" />
                 Restart
             </button>
         </div>
@@ -310,10 +309,11 @@ function SidebarServerExtraActions() {
     let nextScheduledClasses = 'text-muted-foreground/75';
     let disableAddEditBtn = false;
     let isRestartSkipped = false;
-    const hasScheduledRestart = typeof status?.scheduler.nextRelativeMs === 'number';
+    const nextRelativeMs = status?.scheduler.nextRelativeMs;
+    const hasScheduledRestart = typeof nextRelativeMs === 'number';
     if (hasScheduledRestart && status) {
-        const relativeTime = msToShortDuration(status.scheduler.nextRelativeMs, { units: ['h', 'm'], delimiter: ' ' });
-        const isLessThanMinute = status.scheduler.nextRelativeMs < 60_000;
+        const relativeTime = msToShortDuration(nextRelativeMs, { units: ['h', 'm'], delimiter: ' ' });
+        const isLessThanMinute = nextRelativeMs < 60_000;
         if (status.scheduler.nextSkip) {
             nextScheduledClasses = 'text-muted-foreground line-through';
             isRestartSkipped = true;
@@ -416,7 +416,7 @@ function SidebarServerExtraActions() {
             ? 'Restart already cancelled'
             : 'Cancel next restart';
     const iconBtnClass =
-        'flex h-8 w-8 items-center justify-center rounded-md border border-border/50 bg-background/35 text-muted-foreground transition-colors hover:bg-secondary/55 hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
+        'flex size-8 items-center justify-center rounded-md border border-border/50 bg-background/35 text-muted-foreground transition-colors hover:bg-secondary/55 hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
     const adjustLabel = hasScheduledRestart ? 'Adjust restart time' : 'Set restart time';
 
     return (
@@ -434,57 +434,53 @@ function SidebarServerExtraActions() {
             </div>
             <div className="grid grid-cols-4 gap-1.5">
                 <Tooltip>
-                    <TooltipTrigger asChild>
-                        <button
-                            onClick={handleAnnounce}
-                            className={cn(iconBtnClass, 'border-primary/35 text-primary')}
-                            disabled={!hasAnnouncementPerm || !fxRunnerState.isChildAlive}
-                            aria-label="Send announcement"
-                        >
-                            <MegaphoneIcon className="h-3.5 w-3.5" />
-                        </button>
+                    <TooltipTrigger
+                        type="button"
+                        onClick={handleAnnounce}
+                        className={cn(iconBtnClass, 'border-primary/35 text-primary')}
+                        disabled={!hasAnnouncementPerm || !fxRunnerState.isChildAlive}
+                        aria-label="Send announcement"
+                    >
+                        <MegaphoneIcon className="size-3.5" />
                     </TooltipTrigger>
                     <TooltipContent side="top">Send announcement</TooltipContent>
                 </Tooltip>
 
                 <Tooltip>
-                    <TooltipTrigger asChild>
-                        <button
-                            onClick={handleKickAll}
-                            className={cn(iconBtnClass, 'border-warning/35 text-warning-inline')}
-                            disabled={!hasControlPerm || !fxRunnerState.isChildAlive}
-                            aria-label="Kick all players"
-                        >
-                            <KickAllIcon style={{ height: '0.9rem', width: '0.9rem', fill: 'currentcolor' }} />
-                        </button>
+                    <TooltipTrigger
+                        type="button"
+                        onClick={handleKickAll}
+                        className={cn(iconBtnClass, 'border-warning/35 text-warning-inline')}
+                        disabled={!hasControlPerm || !fxRunnerState.isChildAlive}
+                        aria-label="Kick all players"
+                    >
+                        <KickAllIcon style={{ height: '0.9rem', width: '0.9rem', fill: 'currentcolor' }} />
                     </TooltipTrigger>
                     <TooltipContent side="top">Kick all players</TooltipContent>
                 </Tooltip>
 
                 <Tooltip>
-                    <TooltipTrigger asChild>
-                        <button
-                            onClick={handleSchedule}
-                            className={cn(iconBtnClass, 'border-info/35 text-info-inline')}
-                            disabled={!canAdjustRestart}
-                            aria-label={adjustLabel}
-                        >
-                            <SlidersHorizontalIcon className="h-3.5 w-3.5" />
-                        </button>
+                    <TooltipTrigger
+                        type="button"
+                        onClick={handleSchedule}
+                        className={cn(iconBtnClass, 'border-info/35 text-info-inline')}
+                        disabled={!canAdjustRestart}
+                        aria-label={adjustLabel}
+                    >
+                        <SlidersHorizontalIcon className="size-3.5" />
                     </TooltipTrigger>
                     <TooltipContent side="top">{adjustLabel}</TooltipContent>
                 </Tooltip>
 
                 <Tooltip>
-                    <TooltipTrigger asChild>
-                        <button
-                            onClick={handleCancelRestart}
-                            className={cn(iconBtnClass, 'border-destructive/35 text-destructive-inline hover:bg-destructive/10')}
-                            disabled={!canCancelRestart}
-                            aria-label={cancelLabel}
-                        >
-                            <XCircleIcon className="h-3.5 w-3.5" />
-                        </button>
+                    <TooltipTrigger
+                        type="button"
+                        onClick={handleCancelRestart}
+                        className={cn(iconBtnClass, 'border-destructive/35 text-destructive-inline hover:bg-destructive/10')}
+                        disabled={!canCancelRestart}
+                        aria-label={cancelLabel}
+                    >
+                        <XCircleIcon className="size-3.5" />
                     </TooltipTrigger>
                     <TooltipContent side="top">{cancelLabel}</TooltipContent>
                 </Tooltip>
@@ -507,14 +503,14 @@ function ServerStatusCard() {
         return (
             <div className="flex flex-col items-center gap-2">
                 <Tooltip>
-                    <TooltipTrigger asChild>
-                        <span
-                            className={cn(
-                                'h-2 w-2 rounded-full',
-                                isOnline ? 'bg-success animate-pulse' : 'bg-muted-foreground/40',
-                            )}
-                        />
-                    </TooltipTrigger>
+                    <TooltipTrigger
+                        type="button"
+                        aria-label="Server status"
+                        className={cn(
+                            'size-2 rounded-full',
+                            isOnline ? 'bg-success animate-pulse' : 'bg-muted-foreground/40',
+                        )}
+                    />
                     <TooltipContent side="right">
                         <p className="font-semibold">{serverName}</p>
                         <p className="text-muted-foreground text-xs">
@@ -533,7 +529,7 @@ function ServerStatusCard() {
             <div className="mb-2.5 flex items-start gap-2">
                 <span
                     className={cn(
-                        'mt-1 h-2 w-2 shrink-0 rounded-full',
+                        'mt-1 size-2 shrink-0 rounded-full',
                         isOnline ? 'bg-success animate-pulse' : 'bg-muted-foreground/40',
                     )}
                 />
@@ -554,7 +550,7 @@ function ServerStatusCard() {
                         aria-expanded={showExtraActions}
                     >
                         <span>{showExtraActions ? 'Hide extra actions' : 'More actions'}</span>
-                        {showExtraActions ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />}
+                        {showExtraActions ? <ChevronUpIcon className="size-3.5" /> : <ChevronDownIcon className="size-3.5" />}
                     </button>
                     {showExtraActions && <SidebarServerExtraActions />}
                 </>
@@ -572,28 +568,26 @@ function SidebarUserButton() {
 
     return (
         <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <button
-                    className={cn(
-                        'hover:bg-secondary/40 flex w-full items-center rounded-md text-sm transition-colors focus:outline-none',
-                        collapsed ? 'justify-center px-0 py-1.5' : 'gap-2.5 px-2 py-2',
-                    )}
-                >
-                    <Avatar
-                        className="h-7 w-7 shrink-0 rounded-md text-xs"
-                        username={authData.name}
-                        profilePicture={authData.profilePicture}
-                    />
-                    {!collapsed && (
-                        <span className="text-foreground flex-1 truncate text-left text-sm leading-none font-medium">
-                            {authData.name}
-                        </span>
-                    )}
-                </button>
+            <DropdownMenuTrigger
+                className={cn(
+                    'hover:bg-secondary/40 flex w-full items-center rounded-md text-sm transition-colors focus:outline-none',
+                    collapsed ? 'justify-center px-0 py-1.5' : 'gap-2.5 px-2 py-2',
+                )}
+            >
+                <Avatar
+                    className="size-7 shrink-0 rounded-md text-xs"
+                    username={authData.name}
+                    profilePicture={authData.profilePicture}
+                />
+                {!collapsed && (
+                    <span className="text-foreground flex-1 truncate text-left text-sm leading-none font-medium">
+                        {authData.name}
+                    </span>
+                )}
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align={collapsed ? 'center' : 'start'} className="w-52">
                 <DropdownMenuItem className="cursor-pointer" onClick={() => setAccountModalOpen(true)}>
-                    <KeyRoundIcon className="mr-2 h-4 w-4" />
+                    <KeyRoundIcon className="mr-2 size-4" />
                     Your Account
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -607,7 +601,7 @@ function SidebarUserButton() {
                     <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="cursor-pointer" onClick={() => logout()}>
-                            <LogOutIcon className="mr-2 h-4 w-4" />
+                            <LogOutIcon className="mr-2 size-4" />
                             Logout
                         </DropdownMenuItem>
                     </>
@@ -655,10 +649,10 @@ export default function LeftSidebar() {
                     {collapsed ? (
                         <button
                             onClick={toggle}
-                            className="flex h-8 w-8 items-center justify-center rounded-md opacity-90 transition-opacity hover:opacity-100"
+                            className="flex size-8 items-center justify-center rounded-md opacity-90 transition-opacity hover:opacity-100"
                             title="Expand sidebar"
                         >
-                            <img src="/logo2.svg" alt="fxPanel" className="h-8 w-8 rounded-lg" />
+                            <img src="/logo2.svg" alt="fxPanel" className="size-8 rounded-lg" />
                         </button>
                     ) : (
                         <>
@@ -670,10 +664,10 @@ export default function LeftSidebar() {
                             </NavLink>
                             <button
                                 onClick={toggle}
-                                className="text-muted-foreground/50 hover:bg-secondary/40 hover:text-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors"
+                                className="text-muted-foreground/50 hover:bg-secondary/40 hover:text-foreground flex size-7 shrink-0 items-center justify-center rounded-md transition-colors"
                                 title="Collapse sidebar"
                             >
-                                <ChevronLeftIcon className="h-4 w-4" />
+                                <ChevronLeftIcon className="size-4" />
                             </button>
                         </>
                     )}

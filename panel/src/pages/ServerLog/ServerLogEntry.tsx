@@ -165,8 +165,16 @@ const ServerLogEntry = memo(function ServerLogEntry({ event, onPlayerClick }: Se
                     cfg.borderColor,
                 )}
                 onClick={() => setModalOpen(true)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        if (e.key === ' ') e.preventDefault();
+                        setModalOpen(true);
+                    }
+                }}
+                role="button"
+                tabIndex={0}
             >
-                <Icon className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', cfg.color)} />
+                <Icon className={cn('mt-0.5 size-3.5 shrink-0', cfg.color)} />
 
                 <span
                     className="text-muted-foreground mt-px w-18 shrink-0 text-xs tabular-nums"
@@ -194,7 +202,7 @@ const ServerLogEntry = memo(function ServerLogEntry({ event, onPlayerClick }: Se
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <Icon className={cn('h-5 w-5', cfg.color)} />
+                            <Icon className={cn('size-5', cfg.color)} />
                             <span className={cfg.color}>{cfg.label}</span>
                         </DialogTitle>
                         <DialogDescription>
@@ -205,7 +213,7 @@ const ServerLogEntry = memo(function ServerLogEntry({ event, onPlayerClick }: Se
                     <div className="space-y-3 text-sm">
                         {/* Source */}
                         <div className="flex items-start gap-2">
-                            <UserIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                            <UserIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
                             <div>
                                 <p className="text-muted-foreground text-xs font-medium">Source</p>
                                 <p className="font-semibold">{event.src.name || '—'}</p>
@@ -215,7 +223,7 @@ const ServerLogEntry = memo(function ServerLogEntry({ event, onPlayerClick }: Se
                         {/* Player ID */}
                         {sourceId && (
                             <div className="flex items-start gap-2">
-                                <HashIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                                <HashIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
                                 <div>
                                     <p className="text-muted-foreground text-xs font-medium">Identifier</p>
                                     {mutex && netidStr ? (
@@ -232,7 +240,7 @@ const ServerLogEntry = memo(function ServerLogEntry({ event, onPlayerClick }: Se
 
                         {/* Timestamp */}
                         <div className="flex items-start gap-2">
-                            <ClockIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                            <ClockIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
                             <div>
                                 <p className="text-muted-foreground text-xs font-medium">Timestamp</p>
                                 <p>{fullTime}</p>
@@ -244,7 +252,7 @@ const ServerLogEntry = memo(function ServerLogEntry({ event, onPlayerClick }: Se
 
                         {/* Event Type */}
                         <div className="flex items-start gap-2">
-                            <TagIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                            <TagIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
                             <div>
                                 <p className="text-muted-foreground text-xs font-medium">Event Type</p>
                                 <p>
@@ -257,7 +265,7 @@ const ServerLogEntry = memo(function ServerLogEntry({ event, onPlayerClick }: Se
                         {/* Message */}
                         {event.msg && (
                             <div className="flex items-start gap-2">
-                                <TextIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                                <TextIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
                                 <div className="min-w-0">
                                     <p className="text-muted-foreground text-xs font-medium">Message</p>
                                     <p className="wrap-break-word whitespace-pre-wrap">{event.msg}</p>
@@ -271,17 +279,17 @@ const ServerLogEntry = memo(function ServerLogEntry({ event, onPlayerClick }: Se
                         <Button variant="secondary" size="xs" onClick={handleCopy} className="gap-1.5">
                             {copied ? (
                                 <>
-                                    <CheckIcon className="h-3.5 w-3.5 text-green-500" /> Copied
+                                    <CheckIcon className="size-3.5 text-green-500" /> Copied
                                 </>
                             ) : (
                                 <>
-                                    <CopyIcon className="h-3.5 w-3.5" /> Copy
+                                    <CopyIcon className="size-3.5" /> Copy
                                 </>
                             )}
                         </Button>
                         {event.src.id && (
                             <Button variant="secondary" size="xs" onClick={handleOpenPlayer} className="gap-1.5">
-                                <ExternalLinkIcon className="h-3.5 w-3.5" /> View Player
+                                <ExternalLinkIcon className="size-3.5" /> View Player
                             </Button>
                         )}
                     </div>
@@ -320,7 +328,7 @@ export const GroupedJoinLeave = memo(function GroupedJoinLeave({ events, type }:
                 cfg.borderColor,
             )}
         >
-            <Icon className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', cfg.color)} />
+            <Icon className={cn('mt-0.5 size-3.5 shrink-0', cfg.color)} />
             <span
                 className="text-muted-foreground mt-px w-18 shrink-0 cursor-default text-xs tabular-nums"
                 title={getRelativeTime(events[0].ts)}

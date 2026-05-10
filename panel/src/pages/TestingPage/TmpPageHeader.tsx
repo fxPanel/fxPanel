@@ -32,7 +32,7 @@ export default function TmpPageHeader() {
             <Divider />
             <Wrapper>
                 <PageHeader title="Simple + changelog" icon={<Settings2Icon />}>
-                    <PageHeaderChangelog changelogData={[{ author: 'SomeAussieGamer', keys: [], ts: Date.now() }]} />
+                    <PageHeaderChangelog changelogData={[{ author: 'SomeAussieGamer', keys: [], ts: 0 }]} />
                 </PageHeader>
             </Wrapper>
             <Divider />

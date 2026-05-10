@@ -1,5 +1,5 @@
 export const DEV_MOCK_STATUS_STORAGE_KEY = 'fxpanel.devMockStatus';
-export const DEV_MOCK_STATUS_QUERY_KEY = 'devMockStatus';
+const DEV_MOCK_STATUS_QUERY_KEY = 'devMockStatus';
 
 export const isDevMockStatusOptInEnabled = () => {
     if (typeof window === 'undefined') return false;

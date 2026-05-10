@@ -39,20 +39,36 @@ const priorityColors: Record<TicketPriority, string> = {
     critical: 'text-red-500',
 };
 
+type ReportsViewState = {
+    searchQuery: string;
+    categoryFilter: string;
+    statusFilter: string;
+    priorityFilter: string;
+    showArchived: boolean;
+    selectedTicketId: string | null;
+};
+
 export default function ReportsPage() {
-    const [searchQuery, setSearchQuery] = useState('');
-    const [categoryFilter, setCategoryFilter] = useState<string>('all');
-    const [statusFilter, setStatusFilter] = useState<string>('all');
-    const [priorityFilter, setPriorityFilter] = useState<string>('all');
-    const [showArchived, setShowArchived] = useState(false);
-    const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+    const [viewState, setViewState] = useState<ReportsViewState>({
+        searchQuery: '',
+        categoryFilter: 'all',
+        statusFilter: 'all',
+        priorityFilter: 'all',
+        showArchived: false,
+        selectedTicketId: null,
+    });
+    const { searchQuery, categoryFilter, statusFilter, priorityFilter, showArchived, selectedTicketId } = viewState;
+
+    const setViewField = <K extends keyof ReportsViewState>(key: K, value: ReportsViewState[K]) => {
+        setViewState((prev) => ({ ...prev, [key]: value }));
+    };
 
     useEffect(() => {
         const pageUrl = new URL(window.location.toString());
         const ticketId = pageUrl.searchParams.get('ticket');
         if (!ticketId?.length) return;
 
-        setSelectedTicketId(ticketId);
+        setViewField('selectedTicketId', ticketId);
 
         // Consume deep-link param after opening so refresh/back doesn't keep reopening.
         pageUrl.searchParams.delete('ticket');
@@ -123,7 +139,7 @@ export default function ReportsPage() {
                     {openCount > 0 && <Badge variant="destructive">{openCount} open</Badge>}
                     {inReviewCount > 0 && <Badge variant="default">{inReviewCount} in review</Badge>}
                     <Button variant="outline-solid" size="sm" onClick={() => navigate('/reports/analytics')}>
-                        <BarChart2Icon className="mr-1 h-4 w-4" /> Analytics
+                        <BarChart2Icon className="mr-1 size-4" /> Analytics
                     </Button>
                     <Button
                         variant="outline"
@@ -131,7 +147,7 @@ export default function ReportsPage() {
                         onClick={() => ticketsSwr.mutate()}
                         disabled={ticketsSwr.isLoading}
                     >
-                        {ticketsSwr.isLoading ? <Loader2Icon className="h-4 w-4 animate-spin" /> : 'Refresh'}
+                        {ticketsSwr.isLoading ? <Loader2Icon className="size-4 animate-spin" /> : 'Refresh'}
                     </Button>
                 </div>
             </PageHeader>
@@ -140,15 +156,15 @@ export default function ReportsPage() {
                 {/* Filters */}
                 <div className="border-border/40 flex shrink-0 flex-wrap gap-2 border-b p-3">
                     <div className="relative min-w-[180px] flex-1">
-                        <SearchIcon className="text-muted-foreground absolute top-2.5 left-2.5 h-4 w-4" />
+                        <SearchIcon className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
                         <Input
                             placeholder="Search tickets..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(e) => setViewField('searchQuery', e.target.value)}
                             className="pl-8"
                         />
                     </div>
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <Select value={statusFilter} onValueChange={(value) => setViewField('statusFilter', value)}>
                         <SelectTrigger className="w-[140px]">
                             <SelectValue placeholder="Status" />
                         </SelectTrigger>
@@ -160,7 +176,7 @@ export default function ReportsPage() {
                         </SelectContent>
                     </Select>
                     {knownCategories.length > 0 && (
-                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                        <Select value={categoryFilter} onValueChange={(value) => setViewField('categoryFilter', value)}>
                             <SelectTrigger className="w-[160px]">
                                 <SelectValue placeholder="Category" />
                             </SelectTrigger>
@@ -174,7 +190,7 @@ export default function ReportsPage() {
                             </SelectContent>
                         </Select>
                     )}
-                    <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                    <Select value={priorityFilter} onValueChange={(value) => setViewField('priorityFilter', value)}>
                         <SelectTrigger className="w-[140px]">
                             <SelectValue placeholder="Priority" />
                         </SelectTrigger>
@@ -189,10 +205,10 @@ export default function ReportsPage() {
                     <Button
                         type="button"
                         variant={showArchivedSection ? 'outline-solid' : 'outline'}
-                        onClick={() => setShowArchived((current) => !current)}
+                        onClick={() => setViewState((prev) => ({ ...prev, showArchived: !prev.showArchived }))}
                         className="shrink-0"
                     >
-                        <ArchiveIcon className="mr-2 h-4 w-4" />
+                        <ArchiveIcon className="mr-2 size-4" />
                         Archived
                         <Badge variant={showArchivedSection ? 'secondary' : 'outline-solid'} className="ml-2">
                             {archivedTickets.length}
@@ -204,7 +220,7 @@ export default function ReportsPage() {
                 <div className="flex-1 overflow-auto">
                     {ticketsSwr.isLoading ? (
                         <div className="flex justify-center py-8">
-                            <Loader2Icon className="text-muted-foreground h-6 w-6 animate-spin" />
+                            <Loader2Icon className="text-muted-foreground size-6 animate-spin" />
                         </div>
                     ) : ticketsSwr.error ? (
                         <p className="text-destructive py-8 text-center">Reports route not available.</p>
@@ -221,7 +237,7 @@ export default function ReportsPage() {
                                             key={ticket.id}
                                             ticket={ticket}
                                             formatDate={formatDate}
-                                            onClick={() => setSelectedTicketId(ticket.id)}
+                                            onClick={() => setViewField('selectedTicketId', ticket.id)}
                                         />
                                     ))}
                                 </div>
@@ -230,7 +246,7 @@ export default function ReportsPage() {
                             {showArchivedSection && archivedTickets.length > 0 && (
                                 <div className="border-border/40 border-t pt-3">
                                     <div className="flex items-center gap-2 px-3 py-2 text-sm font-medium">
-                                        <ArchiveIcon className="h-4 w-4" />
+                                        <ArchiveIcon className="size-4" />
                                         Archived Tickets
                                         <Badge variant="outline-solid" className="ml-1">
                                             {archivedTickets.length}
@@ -243,7 +259,7 @@ export default function ReportsPage() {
                                                 key={ticket.id}
                                                 ticket={ticket}
                                                 formatDate={formatDate}
-                                                onClick={() => setSelectedTicketId(ticket.id)}
+                                                onClick={() => setViewField('selectedTicketId', ticket.id)}
                                             />
                                         ))}
                                     </div>
@@ -261,7 +277,7 @@ export default function ReportsPage() {
                     open
                     onOpenChange={(open) => {
                         if (!open) {
-                            setSelectedTicketId(null);
+                            setViewField('selectedTicketId', null);
                             ticketsSwr.mutate();
                         }
                     }}
@@ -297,7 +313,7 @@ function TicketRow({
                     )}
                     {ticket.claimedBy && (
                         <span className="text-muted-foreground flex items-center gap-1 text-xs">
-                            <UserCheckIcon className="h-3 w-3" /> {ticket.claimedBy}
+                            <UserCheckIcon className="size-3" /> {ticket.claimedBy}
                         </span>
                     )}
                 </div>

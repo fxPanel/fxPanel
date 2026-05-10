@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createDuplicateKeyResolver } from '@/lib/utils';
 
 const easeOutQuart = (t: number) => 1 - --t * t * t * t;
 const frameDuration = 1000 / 60;
@@ -51,6 +52,7 @@ export default function PageCalloutRow({ callouts }: PageCalloutRowProps) {
     }
 
     const visibleCallouts = callouts.slice(0, 4);
+    const getCalloutKey = createDuplicateKeyResolver();
 
     if (visibleCallouts.length === 0) {
         return (
@@ -62,9 +64,11 @@ export default function PageCalloutRow({ callouts }: PageCalloutRowProps) {
 
     return (
         <div className="xs:gap-3 mb-4 grid grid-cols-2 gap-2 md:mb-5 md:px-0 lg:grid-cols-4">
-            {visibleCallouts.map((callout, i) => (
+            {visibleCallouts.map((callout) => (
                 <div
-                    key={`${callout.label}-${i}`}
+                    key={getCalloutKey(
+                        `${callout.label}:${callout.prefix ?? ''}:${callout.value === false ? 'loading' : callout.value}`,
+                    )}
                     className="border-border/60 bg-card rounded-xl border px-4 py-3 shadow-sm"
                 >
                     <div className="mb-2 flex items-center justify-between">

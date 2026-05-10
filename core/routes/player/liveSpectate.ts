@@ -92,6 +92,10 @@ export async function LiveSpectateStop(ctx: AuthedCtx) {
         return sendResp({ error: 'Session not found or already stopped.' });
     }
 
+    if (session.adminName !== ctx.admin.name) {
+        return sendResp({ error: 'You can only stop your own live spectate session.' });
+    }
+
     cleanupSession(sessionId);
     return sendResp({ success: true });
 }

@@ -3,7 +3,7 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { useEventListener } from 'usehooks-ts';
 import { useContentRefresh } from '@/hooks/pages';
 import { debounce, throttle } from 'throttle-debounce';
@@ -25,11 +25,49 @@ type SystemLogPageProps = {
     pageName: 'console';
 };
 
+type SystemLogPageState = {
+    isLoading: boolean;
+    loadError: string;
+    showSearchBar: boolean;
+};
+
+type SystemLogPageAction =
+    | { type: 'logsLoaded' }
+    | { type: 'logsFailed'; loadError: string }
+    | { type: 'setShowSearchBar'; showSearchBar: boolean };
+
+function reduceSystemLogPageState(state: SystemLogPageState, action: SystemLogPageAction): SystemLogPageState {
+    switch (action.type) {
+        case 'logsLoaded':
+            return {
+                ...state,
+                isLoading: false,
+                loadError: '',
+            };
+        case 'logsFailed':
+            return {
+                ...state,
+                isLoading: false,
+                loadError: action.loadError,
+            };
+        case 'setShowSearchBar':
+            return {
+                ...state,
+                showSearchBar: action.showSearchBar,
+            };
+        default:
+            return state;
+    }
+}
+
 //NOTE: most of this code is yoinked from the live console page
 export default function SystemLogPage({ pageName }: SystemLogPageProps) {
-    const [isLoading, setIsLoading] = useState(true);
-    const [loadError, setLoadError] = useState('');
-    const [showSearchBar, setShowSearchBar] = useState(false);
+    const [state, dispatch] = useReducer(reduceSystemLogPageState, {
+        isLoading: true,
+        loadError: '',
+        showSearchBar: false,
+    });
+    const { isLoading, loadError, showSearchBar } = state;
     const refreshPage = useContentRefresh();
     const getLogsApi = useBackendApi<{ data: string }>({
         method: 'GET',
@@ -153,14 +191,13 @@ export default function SystemLogPage({ pageName }: SystemLogPageProps) {
             //fetch logs
             getLogsApi({
                 success: (resp, toastId) => {
-                    setIsLoading(false);
+                    dispatch({ type: 'logsLoaded' });
                     writeToTerminal(resp.data);
                     term.writeln('');
                     term.writeln('\u001b[33m[END OF LOG - REFRESH THE PAGE TO LOAD MORE]\u001b');
                 },
                 error: (message, toastId) => {
-                    setIsLoading(false);
-                    setLoadError(message);
+                    dispatch({ type: 'logsFailed', loadError: message });
                 },
             });
         }
@@ -175,12 +212,12 @@ export default function SystemLogPage({ pageName }: SystemLogPageProps) {
             }
         } else if (e.code === 'Escape') {
             searchAddon.clearDecorations();
-            setShowSearchBar(false);
+            dispatch({ type: 'setShowSearchBar', showSearchBar: false });
         } else if (e.code === 'KeyF' && (e.ctrlKey || e.metaKey)) {
             if (showSearchBar) {
                 sendSearchKeyEvent('focus');
             } else {
-                setShowSearchBar(true);
+                dispatch({ type: 'setShowSearchBar', showSearchBar: true });
             }
             e.preventDefault();
         } else if (e.code === 'F3') {
@@ -213,8 +250,8 @@ export default function SystemLogPage({ pageName }: SystemLogPageProps) {
 
             <div className="dark text-primary bg-card border-border/60 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border shadow-sm">
                 <div className="bg-secondary/20 border-border/60 flex shrink-0 items-center gap-3 border-b px-4 py-3">
-                    <div className="bg-secondary/50 text-accent/80 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10">
-                        <ScrollTextIcon className="h-4 w-4" />
+                    <div className="bg-secondary/50 text-accent/80 flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/10">
+                        <ScrollTextIcon className="size-4" />
                     </div>
                     <div className="min-w-0">
                         <p className="text-sm font-semibold">Captured terminal stream</p>
@@ -227,9 +264,9 @@ export default function SystemLogPage({ pageName }: SystemLogPageProps) {
                     {isLoading && !loadError ? (
                         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60">
                             <div className="text-muted-foreground flex flex-col items-center justify-center gap-6 select-none">
-                                <Loader2Icon className="h-16 w-16 animate-spin" />
+                                <Loader2Icon className="size-16 animate-spin" />
                                 <h2 className="animate-pulse text-3xl font-light tracking-wider">
-                                    &nbsp;&nbsp;&nbsp;Loading...
+                                    &nbsp;&nbsp;&nbsp;Loading…
                                 </h2>
                             </div>
                         </div>
@@ -249,7 +286,7 @@ export default function SystemLogPage({ pageName }: SystemLogPageProps) {
                     <div ref={containerRef} className="absolute top-1 right-0 bottom-0 left-2" />
 
                     {/* Search bar */}
-                    <LiveConsoleSearchBar show={showSearchBar} setShow={setShowSearchBar} searchAddon={searchAddon} />
+                    {showSearchBar ? <LiveConsoleSearchBar setShow={setShowSearchBar} searchAddon={searchAddon} /> : null}
 
                     {/* Scroll to bottom */}
                     <button
@@ -259,7 +296,7 @@ export default function SystemLogPage({ pageName }: SystemLogPageProps) {
                             term.scrollToBottom();
                         }}
                     >
-                        <ChevronsDownIcon className="h-20 w-20 animate-pulse hover:scale-110 hover:animate-none" />
+                        <ChevronsDownIcon className="size-20 animate-pulse hover:scale-110 hover:animate-none" />
                     </button>
                 </div>
             </div>

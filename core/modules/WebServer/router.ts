@@ -303,10 +303,10 @@ export default () => {
     //Host routes
     router.get('/host/status', hostAuthMw, routes.host_status);
 
-    //DevDebug routes - no auth
+    // DevDebug routes — require session + master (privileged playerlist injection, etc.)
     if (txDevEnv.ENABLED) {
-        router.get('/dev/:scope', routes.dev_get);
-        router.post('/dev/:scope', routes.dev_post);
+        router.get('/dev/:scope', apiAuthMw, wrapRoute('DevDebugGet', routes.dev_get));
+        router.post('/dev/:scope', apiAuthMw, wrapRoute('DevDebugPost', routes.dev_post));
     }
 
     //Insights page mock

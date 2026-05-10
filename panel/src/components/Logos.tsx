@@ -3,7 +3,7 @@ type LogoProps = {
     style?: React.CSSProperties;
 };
 
-export function LogoSquareGreen({ style, className }: LogoProps) {
+function LogoSquareGreen({ style, className }: LogoProps) {
     const src = window.txConsts?.addonThemeLogo || '/logo.svg';
     return <img className={className} style={style} src={src} alt="fxPanel" />;
 }

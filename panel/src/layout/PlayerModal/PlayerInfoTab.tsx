@@ -97,7 +97,7 @@ const calcTextAreaLines = (text?: string) => {
 function PlayerNotesBox({ playerRef, player, refreshModalData }: PlayerNotesBoxProps) {
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
     const [notesLogText, setNotesLogText] = useState(player.notesLog ?? '');
-    const [textAreaLines, setTextAreaLines] = useState(calcTextAreaLines(player.notes));
+    const [textAreaLines, setTextAreaLines] = useState(() => calcTextAreaLines(player.notes));
     const playerNotesApi = useBackendApi<GenericApiOkResp>({
         method: 'POST',
         path: `/player/save_note`,
@@ -297,7 +297,7 @@ export default function PlayerInfoTab({
     return (
         <div className="p-1">
             {playerBannedText ? (
-                <div className="border-warning/70 bg-warning-hint mb-1 flex w-full items-center justify-between space-x-4 rounded-lg border p-2 pr-3 text-white/90 shadow-lg transition-all">
+                <div className="border-warning/70 bg-warning-hint mb-1 flex w-full items-center justify-between gap-x-4 rounded-lg border p-2 pr-3 text-white/90 shadow-lg transition-all">
                     <div className="flex shrink-0 flex-col items-center gap-2">
                         <ShieldAlertIcon className="text-warning size-5" />
                     </div>
@@ -402,7 +402,7 @@ export default function PlayerInfoTab({
                                                 onCheckedChange={() => handleToggleTag(def.id, hasTag)}
                                             >
                                                 <span
-                                                    className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full"
+                                                    className="mr-1.5 inline-block size-2.5 rounded-full"
                                                     style={{ backgroundColor: def.color }}
                                                 />
                                                 {def.label}

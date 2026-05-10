@@ -41,7 +41,7 @@ export function SettingItem({
 }: SettingItemProps) {
     if (showIf !== undefined && !showIf) return null;
     return (
-        <div className="group/cfgCardItem max-w-4xl space-y-2 sm:grid sm:grid-cols-8 sm:items-start sm:gap-4 sm:space-y-0">
+        <div className="group/cfgCardItem flex max-w-4xl flex-col gap-y-2 sm:grid sm:grid-cols-8 sm:items-start sm:gap-4 sm:gap-y-0">
             <div className="sm:col-span-2">
                 <Label className="flex flex-col text-sm leading-6 font-medium" htmlFor={htmlFor}>
                     {label}

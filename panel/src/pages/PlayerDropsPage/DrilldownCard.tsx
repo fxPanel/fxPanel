@@ -31,7 +31,7 @@ function DrilldownSection({
         <Card className={cn('overflow-hidden', className)}>
             <div className="border-border/40 flex flex-col gap-2 border-b px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
                 <div className="flex min-w-0 items-center gap-3">
-                    <div className="bg-secondary/40 border-border/50 text-accent/80 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border [&>svg]:size-4">
+                    <div className="bg-secondary/40 border-border/50 text-accent/80 flex size-9 shrink-0 items-center justify-center rounded-lg border [&>svg]:size-4">
                         {icon}
                     </div>
                     <h3 className="text-sm leading-tight font-semibold tracking-tight">{title}</h3>
@@ -49,7 +49,7 @@ export function DrilldownCardLoading({ isError }: { isError?: boolean }) {
     return (
         <div className="space-y-4">
             <div className="text-muted-foreground space-x-2 text-center text-sm">
-                <span>Loading...</span>
+                <span>Loading…</span>
             </div>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <DrilldownSection icon={<FolderOpenIcon />} title="Period Overview" className="col-span-full">

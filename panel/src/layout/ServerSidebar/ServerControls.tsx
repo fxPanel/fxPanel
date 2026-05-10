@@ -128,27 +128,17 @@ export default function ServerControls() {
     return (
         <div className="flex flex-row justify-between gap-2">
             <Tooltip>
-                <TooltipTrigger asChild>
-                    {fxRunnerState.isIdle ? (
-                        <div className="relative inset-0 flex grow">
-                            <div className="bg-success absolute inset-0 animate-pulse rounded blur-xs"></div>
-                            <button
-                                onClick={handleStartStop}
-                                className={cn(controlButtonsVariants({ type: 'success' }), 'relative')}
-                                disabled={!hasControlPerms}
-                            >
-                                <PowerIcon className="h-5" />
-                            </button>
-                        </div>
-                    ) : (
-                        <button
-                            onClick={handleStartStop}
-                            className={controlButtonsVariants({ type: 'destructive' })}
-                            disabled={!hasControlPerms}
-                        >
-                            <PowerOffIcon className="h-5" />
-                        </button>
+                <TooltipTrigger
+                    type="button"
+                    onClick={handleStartStop}
+                    className={cn(
+                        controlButtonsVariants({ type: fxRunnerState.isIdle ? 'success' : 'destructive' }),
+                        fxRunnerState.isIdle && 'relative',
                     )}
+                    disabled={!hasControlPerms}
+                >
+                    {fxRunnerState.isIdle && <span className="bg-success absolute inset-0 animate-pulse rounded blur-xs" />}
+                    {fxRunnerState.isIdle ? <PowerIcon className="relative h-5" /> : <PowerOffIcon className="h-5" />}
                 </TooltipTrigger>
                 <TooltipContent className={cn(!hasControlPerms && 'text-destructive-inline text-center')}>
                     {hasControlPerms ? (
@@ -162,14 +152,13 @@ export default function ServerControls() {
                 </TooltipContent>
             </Tooltip>
             <Tooltip>
-                <TooltipTrigger asChild>
-                    <button
-                        onClick={handleRestart}
-                        className={cn(controlButtonsVariants({ type: 'warning' }))}
-                        disabled={!hasControlPerms || !fxRunnerState.isChildAlive}
-                    >
-                        <RotateCcwIcon className="h-5" />
-                    </button>
+                <TooltipTrigger
+                    type="button"
+                    onClick={handleRestart}
+                    className={cn(controlButtonsVariants({ type: 'warning' }))}
+                    disabled={!hasControlPerms || !fxRunnerState.isChildAlive}
+                >
+                    <RotateCcwIcon className="h-5" />
                 </TooltipTrigger>
                 <TooltipContent className={cn(!hasControlPerms && 'text-destructive-inline text-center')}>
                     {hasControlPerms ? (
@@ -183,14 +172,13 @@ export default function ServerControls() {
                 </TooltipContent>
             </Tooltip>
             <Tooltip>
-                <TooltipTrigger asChild>
-                    <button
-                        onClick={handleKickAll}
-                        className={controlButtonsVariants()}
-                        disabled={!hasControlPerms || !fxRunnerState.isChildAlive}
-                    >
-                        <KickAllIcon style={{ height: '1.25rem', width: '1.5rem', fill: 'currentcolor' }} />
-                    </button>
+                <TooltipTrigger
+                    type="button"
+                    onClick={handleKickAll}
+                    className={controlButtonsVariants()}
+                    disabled={!hasControlPerms || !fxRunnerState.isChildAlive}
+                >
+                    <KickAllIcon style={{ height: '1.25rem', width: '1.5rem', fill: 'currentcolor' }} />
                 </TooltipTrigger>
                 <TooltipContent className={cn(!hasControlPerms && 'text-destructive-inline text-center')}>
                     {hasControlPerms ? (
@@ -204,14 +192,13 @@ export default function ServerControls() {
                 </TooltipContent>
             </Tooltip>
             <Tooltip>
-                <TooltipTrigger asChild>
-                    <button
-                        onClick={handleAnnounce}
-                        className={controlButtonsVariants()}
-                        disabled={!hasAnnouncementPerm || !fxRunnerState.isChildAlive}
-                    >
-                        <MegaphoneIcon className="h-5" />
-                    </button>
+                <TooltipTrigger
+                    type="button"
+                    onClick={handleAnnounce}
+                    className={controlButtonsVariants()}
+                    disabled={!hasAnnouncementPerm || !fxRunnerState.isChildAlive}
+                >
+                    <MegaphoneIcon className="h-5" />
                 </TooltipTrigger>
                 <TooltipContent className={cn(!hasAnnouncementPerm && 'text-destructive-inline text-center')}>
                     {hasAnnouncementPerm ? (

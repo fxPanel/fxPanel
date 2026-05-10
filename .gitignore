@@ -18,6 +18,8 @@ scripts/**/*.local.*
 *.tsbuildinfo
 .npm-upgrade.json
 .github/agents/*
+.cursor/
+.claude/
 
 # OS files
 .DS_Store

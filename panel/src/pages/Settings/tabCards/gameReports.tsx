@@ -8,6 +8,7 @@ import {
     getPageConfig,
     configsReducer,
     getConfigDiff,
+    reconcileCardPendingSave,
 } from '../utils';
 import SettingsCardShell from '../SettingsCardShell';
 import { Input } from '@/components/ui/input';
@@ -54,10 +55,13 @@ export default function ConfigCardGameReports({ cardCtx, pageCtx }: SettingsCard
 
     const updatePageState = useCallback(() => {
         const rawCategories = categoriesRef.current?.value ?? '';
-        const categories = rawCategories
-            .split(/[,;]\s*/)
-            .map((s) => s.trim())
-            .filter((s) => s.length > 0);
+        const categories = rawCategories.split(/[,;]\s*/).reduce<string[]>((values, value) => {
+            const trimmedValue = value.trim();
+            if (trimmedValue.length > 0) {
+                values.push(trimmedValue);
+            }
+            return values;
+        }, []);
         const retDays = parseInt(retentionDaysRef.current?.value ?? '30', 10);
         const chanId = ticketChannelRef.current?.value.trim() || null;
 
@@ -68,7 +72,7 @@ export default function ConfigCardGameReports({ cardCtx, pageCtx }: SettingsCard
         } as any;
 
         const res = getConfigDiff(cfg, states, overwrites as any, false);
-        pageCtx.setCardPendingSave(res.hasChanges ? cardCtx : null);
+        pageCtx.setCardPendingSave(reconcileCardPendingSave(cardCtx, res.hasChanges));
         return res;
     }, [cfg, states, pageCtx, cardCtx]);
 

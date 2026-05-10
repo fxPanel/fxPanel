@@ -334,7 +334,7 @@ export default function ThreadPerfCard() {
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <BarChartHorizontalIcon className="text-muted-foreground/30 h-3.5 w-3.5" />
+                    <BarChartHorizontalIcon className="text-muted-foreground/30 size-3.5" />
                 </div>
             </div>
             <DebouncedResizeContainer onDebouncedResize={setChartSize}>{contentNode}</DebouncedResizeContainer>

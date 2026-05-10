@@ -2,7 +2,7 @@ import { txToast } from '@/components/TxToaster';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useOpenPromptDialog } from '@/hooks/dialogs';
 import { useLiveConsoleBookmarks, useLiveConsoleHistory } from '@/pages/LiveConsole/liveConsoleHooks';
-import { cn } from '@/lib/utils';
+import { cn, createDuplicateKeyResolver } from '@/lib/utils';
 import { PlusIcon, StarIcon, StarOffIcon, XIcon } from 'lucide-react';
 
 type SheetProps = {
@@ -13,7 +13,9 @@ type SheetProps = {
 
 function SheetBackdrop({ isOpen, closeSheet }: Omit<SheetProps, 'toTermInput'>) {
     return (
-        <div
+        <button
+            type="button"
+            aria-label="Close command sheet"
             className={cn(
                 'absolute inset-0 z-20',
                 'bg-black/60 duration-300',
@@ -34,7 +36,7 @@ function SheetCloseButton({ closeSheet }: Pick<SheetProps, 'closeSheet'>) {
             onClick={closeSheet}
             title="Close"
         >
-            <XIcon className="h-8 w-8" />
+            <XIcon className="size-8" />
         </button>
     );
 }
@@ -56,10 +58,19 @@ function SheetCommand({ cmd, type, onClick, onFavAction }: SheetCommandProps) {
         <div
             onClick={onClick}
             className="bg-card hover:bg-muted group flex cursor-pointer items-center justify-between rounded-lg px-2 py-1"
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    if (event.key === ' ') event.preventDefault();
+                    onClick();
+                }
+            }}
+            role="button"
+            tabIndex={0}
         >
             <span className="group-hover:text-primary line-clamp-4 py-1 font-mono">{cmd}</span>
             <div className="min-w-max">
                 <button
+                    type="button"
                     className="hover:bg-primary hover:text-primary-foreground invisible flex size-7 items-center justify-center rounded-lg group-hover:visible"
                     onClick={handleFavAction}
                 >
@@ -84,6 +95,8 @@ function SheetContent({ toTermInput }: Pick<SheetProps, 'toTermInput'>) {
     const { history, wipeHistory } = useLiveConsoleHistory();
     const { bookmarks, addBookmark, removeBookmark } = useLiveConsoleBookmarks();
     const openPromptDialog = useOpenPromptDialog();
+    const getHistoryKey = createDuplicateKeyResolver();
+    const getBookmarkKey = createDuplicateKeyResolver();
 
     const handleWipeHistory = () => {
         txToast.success('History cleared');
@@ -102,7 +115,7 @@ function SheetContent({ toTermInput }: Pick<SheetProps, 'toTermInput'>) {
     return (
         <div className="flex max-h-full flex-row gap-4">
             <div className="flex w-1/2 grow flex-col gap-2">
-                <h2 className="text-xl font-bold">History</h2>
+                <h2 className="text-xl font-semibold">History</h2>
                 <ScrollArea
                     className="text-muted-foreground max-h-full w-full pr-3 text-sm"
                     style={{ wordBreak: 'break-word' }}
@@ -112,14 +125,14 @@ function SheetContent({ toTermInput }: Pick<SheetProps, 'toTermInput'>) {
                         className="bg-secondary hover:bg-primary hover:text-primary-foreground mb-2 w-full rounded-lg py-2 font-sans tracking-wider"
                     >
                         <div className="flex items-center justify-center gap-2">
-                            <XIcon className="inline h-4 w-4" />
+                            <XIcon className="inline size-4" />
                             Clear History
                         </div>
                     </button>
                     <div className="line-clamp-1 space-y-2 pb-4 font-mono text-sm tracking-wide">
-                        {history.map((cmd, index) => (
+                        {history.map((cmd) => (
                             <SheetCommand
-                                key={index}
+                                key={getHistoryKey(cmd)}
                                 cmd={cmd}
                                 type="history"
                                 onClick={() => toTermInput(cmd)}
@@ -135,7 +148,7 @@ function SheetContent({ toTermInput }: Pick<SheetProps, 'toTermInput'>) {
                 </ScrollArea>
             </div>
             <div className="flex w-1/2 grow flex-col gap-2">
-                <h2 className="text-xl font-bold">Saved</h2>
+                <h2 className="text-xl font-semibold">Saved</h2>
                 <ScrollArea
                     className="text-muted-foreground max-h-full w-full pr-3 text-sm"
                     style={{ wordBreak: 'break-word' }}
@@ -145,14 +158,14 @@ function SheetContent({ toTermInput }: Pick<SheetProps, 'toTermInput'>) {
                         className="bg-secondary hover:bg-primary hover:text-primary-foreground mb-2 w-full rounded-lg py-2 font-sans tracking-wider"
                     >
                         <div className="flex items-center justify-center gap-2">
-                            <PlusIcon className="inline h-4 w-4" />
+                            <PlusIcon className="inline size-4" />
                             Add New
                         </div>
                     </button>
                     <div className="line-clamp-1 space-y-2 pb-4 font-mono text-sm tracking-wide">
-                        {bookmarks.map((cmd, index) => (
+                        {bookmarks.map((cmd) => (
                             <SheetCommand
-                                key={index}
+                                key={getBookmarkKey(cmd)}
                                 cmd={cmd}
                                 type="saved"
                                 onClick={() => toTermInput(cmd)}

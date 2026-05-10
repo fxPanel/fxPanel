@@ -13,6 +13,7 @@ import {
     getPageConfig,
     configsReducer,
     getConfigDiff,
+    reconcileCardPendingSave,
 } from '../utils';
 import { Button } from '@/components/ui/button';
 import SettingsCardShell from '../SettingsCardShell';
@@ -30,11 +31,17 @@ type ItemWithStateProps = {
 function ItemWithState({ value, setValue, disabled }: ItemWithStateProps) {
     return (
         <div className="flex min-h-18 items-center gap-2 rounded-lg border px-2 py-3 font-mono">
-            <Button onClick={() => value !== undefined && setValue(value - 1)} disabled={disabled}>
+            <Button
+                onClick={() => setValue((prev) => (prev !== undefined ? prev - 1 : prev))}
+                disabled={disabled}
+            >
                 \/
             </Button>
             <Button disabled>{value}</Button>
-            <Button onClick={() => value !== undefined && setValue(value + 1)} disabled={disabled}>
+            <Button
+                onClick={() => setValue((prev) => (prev !== undefined ? prev + 1 : prev))}
+                disabled={disabled}
+            >
                 /\
             </Button>
         </div>
@@ -110,7 +117,7 @@ export default function SettingsCardTemplate({ cardCtx, pageCtx }: SettingsCardP
         };
 
         const res = getConfigDiff(cfg, states, overwrites, showAdvanced);
-        pageCtx.setCardPendingSave(res.hasChanges ? cardCtx : null);
+        pageCtx.setCardPendingSave(reconcileCardPendingSave(cardCtx, res.hasChanges));
         return res;
     };
 

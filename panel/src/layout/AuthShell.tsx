@@ -36,9 +36,9 @@ function BrandPanel() {
                 }}
             />
             {/* accent glow top-left */}
-            <div className="bg-accent/10 absolute -top-32 -left-32 h-80 w-80 rounded-full blur-3xl" />
+            <div className="bg-accent/10 absolute -top-32 -left-32 size-80 rounded-full blur-3xl" />
             {/* accent glow bottom-right */}
-            <div className="bg-accent/8 absolute -right-16 -bottom-24 h-64 w-64 rounded-full blur-3xl" />
+            <div className="bg-accent/8 absolute -right-16 -bottom-24 size-64 rounded-full blur-3xl" />
 
             {/* Logo top */}
             <div className="relative z-10">
@@ -52,6 +52,7 @@ function BrandPanel() {
                         <div className="flex items-center gap-4">
                             <ServerGlowIcon
                                 iconFilename={server.icon}
+                                iconDataUrl={server.iconDataUrl}
                                 serverName={server.name}
                                 gameName={server.game}
                             />

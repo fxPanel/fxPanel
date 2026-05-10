@@ -74,20 +74,13 @@ export const CustomToast = ({ t, type, data }: CustomToastProps) => {
     const [elapsedTime, setElapsedTime] = useState(0);
 
     useEffect(() => {
-        let timer: NodeJS.Timeout | null = null;
-        const cleanup = () => {
-            timer && clearInterval(timer);
-        };
+        if (type !== 'loading' || !t.visible) return;
 
-        if (type === 'loading' && t.visible) {
-            timer = setInterval(() => {
-                setElapsedTime((prevElapsedTime) => prevElapsedTime + 1);
-            }, 1000);
-        } else if (timer) {
-            cleanup();
-        }
+        const timer = window.setInterval(() => {
+            setElapsedTime((prevElapsedTime) => prevElapsedTime + 1);
+        }, 1000);
 
-        return cleanup;
+        return () => window.clearInterval(timer);
     }, [type, t.visible]);
 
     return (

@@ -10,6 +10,7 @@ import {
     getPageConfig,
     configsReducer,
     getConfigDiff,
+    reconcileCardPendingSave,
 } from '../utils';
 import SettingsCardShell from '../SettingsCardShell';
 
@@ -40,7 +41,7 @@ export default function ConfigCardGameNotifications({ cardCtx, pageCtx }: Settin
         const overwrites = {};
 
         const res = getConfigDiff(cfg, states, overwrites, false);
-        pageCtx.setCardPendingSave(res.hasChanges ? cardCtx : null);
+        pageCtx.setCardPendingSave(reconcileCardPendingSave(cardCtx, res.hasChanges));
         return res;
     };
 

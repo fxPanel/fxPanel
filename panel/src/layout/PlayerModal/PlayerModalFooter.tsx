@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useReducer } from 'react';
 import { DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,6 +39,136 @@ type PlayerModalFooterProps = {
     addonActions?: AddonWidgetEntry[];
 };
 
+type PlayerModalFooterState = {
+    screenshotOpen: boolean;
+    screenshotData: string | null;
+    screenshotLoading: boolean;
+    screenshotError: string | null;
+    spectateOpen: boolean;
+    spectateSessionId: string | null;
+    spectateError: string | null;
+};
+
+const reducePlayerModalFooterState = (state: PlayerModalFooterState, action: Partial<PlayerModalFooterState>) => {
+    return {
+        ...state,
+        ...action,
+    };
+};
+
+type PlayerFooterActionsProps = {
+    player?: PlayerModalPlayerData;
+    addonActions?: AddonWidgetEntry[];
+    hasPerm: ReturnType<typeof useAdminPerms>['hasPerm'];
+    onDm: () => void;
+    onKick: () => void;
+    onWarn: () => void;
+    onGiveAdmin: () => void;
+    onHeal: () => void;
+    onScreenshot: () => void;
+    onLiveSpectate: () => void;
+    onDeletePlayer: () => void;
+};
+
+function PlayerFooterActions({
+    player,
+    addonActions,
+    hasPerm,
+    onDm,
+    onKick,
+    onWarn,
+    onGiveAdmin,
+    onHeal,
+    onScreenshot,
+    onLiveSpectate,
+    onDeletePlayer,
+}: PlayerFooterActionsProps) {
+    return (
+        <DialogFooter className="grid max-w-2xl grid-cols-2 gap-2 border-t p-2 sm:flex md:p-4">
+            <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasPerm('players.direct_message') || !player || !player.isConnected}
+                onClick={onDm}
+                className="pl-2"
+            >
+                <MailIcon className="mr-1 h-5" /> DM
+            </Button>
+            <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasPerm('players.kick') || !player || !player.isConnected}
+                onClick={onKick}
+                className="pl-2"
+            >
+                <KickOneIcon
+                    style={{
+                        height: '1.25rem',
+                        width: '1.75rem',
+                        marginRight: '0.25rem',
+                        fill: 'currentcolor',
+                    }}
+                />{' '}
+                Kick
+            </Button>
+            <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasPerm('players.warn') || !player}
+                onClick={onWarn}
+                className="pl-2"
+            >
+                <AlertTriangleIcon className="mr-1 h-5" /> Warn
+            </Button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" disabled={!player} className="pl-2">
+                        <MoreHorizontalIcon className="mr-1 h-5" /> More
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem disabled={!hasPerm('manage.admins') || !player?.ids.length} onClick={onGiveAdmin}>
+                        <ShieldCheckIcon className="mr-2 size-4" /> Give Admin
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={!hasPerm('players.heal') || !player?.isConnected} onClick={onHeal}>
+                        <HeartIcon className="mr-2 size-4" /> Heal
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        disabled={!hasPerm('players.spectate') || !player?.isConnected}
+                        onClick={onScreenshot}
+                    >
+                        <CameraIcon className="mr-2 size-4" /> Screenshot
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        disabled={!hasPerm('players.spectate') || !player?.isConnected}
+                        onClick={onLiveSpectate}
+                    >
+                        <EyeIcon className="mr-2 size-4" /> Watch Live
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                        disabled={!hasPerm('players.delete') || !player?.isRegistered}
+                        onClick={onDeletePlayer}
+                        className="text-destructive focus:text-destructive"
+                    >
+                        <Trash2Icon className="mr-2 size-4" /> Delete Player
+                    </DropdownMenuItem>
+                    {addonActions && addonActions.length > 0 && (
+                        <>
+                            <DropdownMenuSeparator />
+                            {addonActions.map((w) => (
+                                <ErrorBoundary key={`${w.addonId}-${w.title}`} fallback={null}>
+                                    <w.Component />
+                                </ErrorBoundary>
+                            ))}
+                        </>
+                    )}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </DialogFooter>
+    );
+}
+
 export default function PlayerModalFooter({ playerRef, player, addonActions }: PlayerModalFooterProps) {
     const { hasPerm } = useAdminPerms();
     const openPromptDialog = useOpenPromptDialog();
@@ -50,15 +180,24 @@ export default function PlayerModalFooter({ playerRef, player, addonActions }: P
     const closeAllSheets = useCloseAllSheets();
 
     // Screenshot state
-    const [screenshotOpen, setScreenshotOpen] = useState(false);
-    const [screenshotData, setScreenshotData] = useState<string | null>(null);
-    const [screenshotLoading, setScreenshotLoading] = useState(false);
-    const [screenshotError, setScreenshotError] = useState<string | null>(null);
-
-    // Live spectate state
-    const [spectateOpen, setSpectateOpen] = useState(false);
-    const [spectateSessionId, setSpectateSessionId] = useState<string | null>(null);
-    const [spectateError, setSpectateError] = useState<string | null>(null);
+    const [state, dispatch] = useReducer(reducePlayerModalFooterState, {
+        screenshotOpen: false,
+        screenshotData: null,
+        screenshotLoading: false,
+        screenshotError: null,
+        spectateOpen: false,
+        spectateSessionId: null,
+        spectateError: null,
+    });
+    const {
+        screenshotOpen,
+        screenshotData,
+        screenshotLoading,
+        screenshotError,
+        spectateOpen,
+        spectateSessionId,
+        spectateError,
+    } = state;
 
     const playerMessageApi = useBackendApi<GenericApiOkResp>({
         method: 'POST',
@@ -196,47 +335,55 @@ export default function PlayerModalFooter({ playerRef, player, addonActions }: P
 
     const handleScreenshot = () => {
         if (!player) return;
-        setScreenshotData(null);
-        setScreenshotError(null);
-        setScreenshotLoading(true);
-        setScreenshotOpen(true);
+        dispatch({
+            screenshotData: null,
+            screenshotError: null,
+            screenshotLoading: true,
+            screenshotOpen: true,
+        });
         playerScreenshotApi({
             queryParams: playerRef,
             data: {},
             timeout: ApiTimeout.REALLY_REALLY_LONG,
             success: (data: any) => {
-                setScreenshotLoading(false);
+                dispatch({ screenshotLoading: false });
                 if (data.imageData) {
-                    setScreenshotData(data.imageData);
+                    dispatch({ screenshotData: data.imageData });
                 } else if (data.error) {
-                    setScreenshotError(data.error);
+                    dispatch({ screenshotError: data.error });
                 }
             },
             error: (errorMsg) => {
-                setScreenshotLoading(false);
-                setScreenshotError(typeof errorMsg === 'string' ? errorMsg : 'Failed to capture screenshot.');
+                dispatch({
+                    screenshotLoading: false,
+                    screenshotError: typeof errorMsg === 'string' ? errorMsg : 'Failed to capture screenshot.',
+                });
             },
         });
     };
 
     const handleLiveSpectate = () => {
         if (!player) return;
-        setSpectateError(null);
-        setSpectateSessionId(null);
-        setSpectateOpen(true);
+        dispatch({
+            spectateError: null,
+            spectateSessionId: null,
+            spectateOpen: true,
+        });
         liveSpectateStartApi({
             queryParams: playerRef,
             data: {},
             timeout: ApiTimeout.LONG,
             success: (data: any) => {
                 if (data.sessionId) {
-                    setSpectateSessionId(data.sessionId);
+                    dispatch({ spectateSessionId: data.sessionId });
                 } else if (data.error) {
-                    setSpectateError(data.error);
+                    dispatch({ spectateError: data.error });
                 }
             },
             error: (errorMsg) => {
-                setSpectateError(typeof errorMsg === 'string' ? errorMsg : 'Failed to start live spectate.');
+                dispatch({
+                    spectateError: typeof errorMsg === 'string' ? errorMsg : 'Failed to start live spectate.',
+                });
             },
         });
     };
@@ -247,8 +394,7 @@ export default function PlayerModalFooter({ playerRef, player, addonActions }: P
                 data: { sessionId: spectateSessionId },
             });
         }
-        setSpectateSessionId(null);
-        setSpectateOpen(false);
+        dispatch({ spectateSessionId: null, spectateOpen: false });
     };
 
     const handleDeletePlayer = () => {
@@ -283,97 +429,22 @@ export default function PlayerModalFooter({ playerRef, player, addonActions }: P
 
     return (
         <>
-            <DialogFooter className="grid max-w-2xl grid-cols-2 gap-2 border-t p-2 sm:flex md:p-4">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!hasPerm('players.direct_message') || !player || !player.isConnected}
-                    onClick={handleDm}
-                    className="pl-2"
-                >
-                    <MailIcon className="mr-1 h-5" /> DM
-                </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!hasPerm('players.kick') || !player || !player.isConnected}
-                    onClick={handleKick}
-                    className="pl-2"
-                >
-                    <KickOneIcon
-                        style={{
-                            height: '1.25rem',
-                            width: '1.75rem',
-                            marginRight: '0.25rem',
-                            fill: 'currentcolor',
-                        }}
-                    />{' '}
-                    Kick
-                </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!hasPerm('players.warn') || !player}
-                    onClick={handleWarn}
-                    className="pl-2"
-                >
-                    <AlertTriangleIcon className="mr-1 h-5" /> Warn
-                </Button>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" disabled={!player} className="pl-2">
-                            <MoreHorizontalIcon className="mr-1 h-5" /> More
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                            disabled={!hasPerm('manage.admins') || !player?.ids.length}
-                            onClick={handleGiveAdmin}
-                        >
-                            <ShieldCheckIcon className="mr-2 h-4 w-4" /> Give Admin
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            disabled={!hasPerm('players.heal') || !player?.isConnected}
-                            onClick={handleHeal}
-                        >
-                            <HeartIcon className="mr-2 h-4 w-4" /> Heal
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            disabled={!hasPerm('players.spectate') || !player?.isConnected}
-                            onClick={handleScreenshot}
-                        >
-                            <CameraIcon className="mr-2 h-4 w-4" /> Screenshot
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            disabled={!hasPerm('players.spectate') || !player?.isConnected}
-                            onClick={handleLiveSpectate}
-                        >
-                            <EyeIcon className="mr-2 h-4 w-4" /> Watch Live
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                            disabled={!hasPerm('players.delete') || !player?.isRegistered}
-                            onClick={handleDeletePlayer}
-                            className="text-destructive focus:text-destructive"
-                        >
-                            <Trash2Icon className="mr-2 h-4 w-4" /> Delete Player
-                        </DropdownMenuItem>
-                        {addonActions && addonActions.length > 0 && (
-                            <>
-                                <DropdownMenuSeparator />
-                                {addonActions.map((w) => (
-                                    <ErrorBoundary key={`${w.addonId}-${w.title}`} fallback={null}>
-                                        <w.Component />
-                                    </ErrorBoundary>
-                                ))}
-                            </>
-                        )}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </DialogFooter>
+            <PlayerFooterActions
+                player={player}
+                addonActions={addonActions}
+                hasPerm={hasPerm}
+                onDm={handleDm}
+                onKick={handleKick}
+                onWarn={handleWarn}
+                onGiveAdmin={handleGiveAdmin}
+                onHeal={handleHeal}
+                onScreenshot={handleScreenshot}
+                onLiveSpectate={handleLiveSpectate}
+                onDeletePlayer={handleDeletePlayer}
+            />
             <ScreenshotDialog
                 open={screenshotOpen}
-                onOpenChange={setScreenshotOpen}
+                onOpenChange={(open) => dispatch({ screenshotOpen: open })}
                 imageData={screenshotData}
                 loading={screenshotLoading}
                 error={screenshotError}
@@ -381,7 +452,7 @@ export default function PlayerModalFooter({ playerRef, player, addonActions }: P
             />
             <LiveSpectateDialog
                 open={spectateOpen}
-                onOpenChange={setSpectateOpen}
+                onOpenChange={(open) => dispatch({ spectateOpen: open })}
                 sessionId={spectateSessionId}
                 playerName={player?.displayName ?? ''}
                 onStop={handleStopSpectate}

@@ -1,4 +1,4 @@
-export type ServerLogEventSource = {
+type ServerLogEventSource = {
     id: string | false;
     name: string;
 };
@@ -10,7 +10,7 @@ export type ServerLogEvent = {
     msg: string;
 };
 
-export const EVENT_TYPES = [
+const EVENT_TYPES = [
     'playerJoining',
     'playerJoinDenied',
     'playerDropped',

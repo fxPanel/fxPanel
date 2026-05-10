@@ -66,9 +66,15 @@ export default class WebServer {
         // would need to brute-force the full 256-bit key.
         this.app.keys = [crypto.randomBytes(32).toString('base64url')];
 
-        // Some people might want to enable it, but we are not guaranteeing XFF security
-        // due to the many possible ways you can connect to koa.
-        // this.app.proxy = true;
+        // Koa `ctx.ip` / secure / host: opt-in via `txConfig.webServer.trustProxy`.
+        // When enabled, terminate TLS and sanitize X-Forwarded-* only at a trusted edge.
+        if (txConfig.webServer.trustProxy) {
+            this.app.proxy = true;
+            const hops = txConfig.webServer.proxyTrustedHops;
+            if (typeof hops === 'number' && hops > 0) {
+                this.app.maxIpsCount = hops;
+            }
+        }
 
         //Setting up app
         //@ts-ignore: no clue what this error is, but i'd bet it's just bad koa types
@@ -192,8 +198,20 @@ export default class WebServer {
         //Calls the appropriate callback
         try {
             // console.debug(`HTTP ${req.method} ${req.url}`);
-            if (!checkHttpLoad()) return;
-            if (!checkRateLimit(req?.socket?.remoteAddress)) return;
+            if (!checkHttpLoad()) {
+                res.statusCode = 503;
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Connection', 'close');
+                res.end('Service Unavailable');
+                return;
+            }
+            if (!checkRateLimit(req?.socket?.remoteAddress)) {
+                res.statusCode = 429;
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Connection', 'close');
+                res.end('Too Many Requests');
+                return;
+            }
             if (req.url.startsWith('/socket.io')) {
                 (this.io.engine as any).handleRequest(req, res);
             } else {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useReducer } from 'react';
 import { getSocket, joinSocketRoom, leaveSocketRoom } from '@/lib/utils';
 import { useBackendApi } from '@/hooks/fetch';
 import type { SystemLogEntry } from '@shared/systemLogTypes';
@@ -42,10 +42,58 @@ const getVisibleCategories = (filters: ActionLogFiltersState): Set<string> => {
     return categories;
 };
 
+type ActionLogSocketState = {
+    events: SystemLogEntry[];
+    isConnected: boolean;
+};
+
+type ActionLogSocketAction =
+    | { type: 'setConnected'; isConnected: boolean }
+    | { type: 'appendEvents'; events: SystemLogEntry[] }
+    | { type: 'replaceEvents'; events: SystemLogEntry[] }
+    | { type: 'clearEvents' };
+
+const trimActionLogEvents = (events: SystemLogEntry[]) => {
+    if (events.length > MAX_EVENTS) {
+        return events.slice(-MAX_EVENTS);
+    }
+    return events;
+};
+
+function reduceActionLogSocketState(state: ActionLogSocketState, action: ActionLogSocketAction): ActionLogSocketState {
+    switch (action.type) {
+        case 'setConnected':
+            return {
+                ...state,
+                isConnected: action.isConnected,
+            };
+        case 'appendEvents':
+            return {
+                ...state,
+                events: trimActionLogEvents([...state.events, ...action.events]),
+            };
+        case 'replaceEvents':
+            return {
+                ...state,
+                events: trimActionLogEvents(action.events),
+            };
+        case 'clearEvents':
+            return {
+                ...state,
+                events: [],
+            };
+        default:
+            return state;
+    }
+}
+
 export default function useActionLog() {
-    const [events, setEvents] = useState<SystemLogEntry[]>([]);
+    const [socketState, dispatchSocketState] = useReducer(reduceActionLogSocketState, {
+        events: [],
+        isConnected: false,
+    });
+    const { events, isConnected } = socketState;
     const [isLive, setIsLive] = useState(true);
-    const [isConnected, setIsConnected] = useState(false);
     const [isLoadingOlder, setIsLoadingOlder] = useState(false);
     const [hasOlderData, setHasOlderData] = useState(true);
     const [filters, setFilters] = useState<ActionLogFiltersState>(loadFilters);
@@ -93,23 +141,17 @@ export default function useActionLog() {
 
         const socket = getSocket();
         pageSocket.current = socket;
-        setIsConnected(socket.connected);
+        dispatchSocketState({ type: 'setConnected', isConnected: socket.connected });
 
         const connectHandler = () => {
-            setIsConnected(true);
+            dispatchSocketState({ type: 'setConnected', isConnected: true });
         };
         const disconnectHandler = () => {
-            setIsConnected(false);
+            dispatchSocketState({ type: 'setConnected', isConnected: false });
         };
         const logDataHandler = (data: SystemLogEntry | SystemLogEntry[]) => {
             const entries = Array.isArray(data) ? data : [data];
-            setEvents((prev) => {
-                const merged = [...prev, ...entries];
-                if (merged.length > MAX_EVENTS) {
-                    return merged.slice(-MAX_EVENTS);
-                }
-                return merged;
-            });
+            dispatchSocketState({ type: 'appendEvents', events: entries });
         };
 
         socket.on('connect', connectHandler);
@@ -123,7 +165,7 @@ export default function useActionLog() {
             (socket as any).off('systemLogData', logDataHandler);
             leaveSocketRoom('systemlog');
             pageSocket.current = null;
-            setIsConnected(false);
+            dispatchSocketState({ type: 'setConnected', isConnected: false });
         };
     }, [isLive]);
 
@@ -134,7 +176,7 @@ export default function useActionLog() {
 
     const goLive = useCallback(() => {
         setActiveSession(null);
-        setEvents([]);
+        dispatchSocketState({ type: 'clearEvents' });
         setHasOlderData(true);
         setIsLive(true);
     }, []);
@@ -144,13 +186,13 @@ export default function useActionLog() {
         async (fileName: string) => {
             setIsLive(false);
             setActiveSession(fileName);
-            setEvents([]);
+            dispatchSocketState({ type: 'clearEvents' });
             setHasOlderData(false);
             setIsLoadingSession(true);
             try {
                 const resp = await sessionFileApi({ queryParams: { file: fileName } });
                 if (resp?.events) {
-                    setEvents(resp.events);
+                    dispatchSocketState({ type: 'replaceEvents', events: resp.events });
                 }
             } catch (_) {
                 /* silently fail */
@@ -173,13 +215,7 @@ export default function useActionLog() {
             if (!resp || !Array.isArray(resp.log)) return;
             if (resp.boundry) setHasOlderData(false);
             if (resp.log.length > 0) {
-                setEvents((prev) => {
-                    const merged = [...resp.log, ...prev];
-                    if (merged.length > MAX_EVENTS) {
-                        return merged.slice(-MAX_EVENTS);
-                    }
-                    return merged;
-                });
+                dispatchSocketState({ type: 'replaceEvents', events: [...resp.log, ...events] });
             } else {
                 setHasOlderData(false);
             }
@@ -195,7 +231,7 @@ export default function useActionLog() {
         async (timestamp: number) => {
             setIsLive(false);
             setActiveSession(null);
-            setEvents([]);
+            dispatchSocketState({ type: 'clearEvents' });
             setHasOlderData(true);
             setIsLoadingOlder(true);
             try {
@@ -203,7 +239,7 @@ export default function useActionLog() {
                     queryParams: { dir: 'newer', ref: String(timestamp) },
                 });
                 if (!resp || !Array.isArray(resp.log)) return;
-                setEvents(resp.log);
+                dispatchSocketState({ type: 'replaceEvents', events: resp.log });
                 if (resp.boundry) {
                     goLive();
                 }

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useReducer, type ReactNode } from 'react';
 import { useBackendApi } from '@/hooks/fetch';
 import { Button } from '@/components/ui/button';
 import { Loader2Icon, ActivityIcon } from 'lucide-react';
@@ -172,6 +172,26 @@ type DiscordBotActionResp = {
     message?: string;
     error?: string;
     diagnostics?: DiscordBotDiagnostics;
+};
+
+type DiagnosticsPageState = {
+    section: DiagnosticsSectionId;
+    reportModalOpen: boolean;
+    reportState: 'info' | 'loading' | 'success' | 'error';
+    reportId: string;
+    reportError: string;
+    botActionState: {
+        action: 'restart' | 'reload-addons' | 'resync' | null;
+        error: string;
+        message: string;
+    };
+};
+
+const reduceDiagnosticsPageState = (state: DiagnosticsPageState, action: Partial<DiagnosticsPageState>) => {
+    return {
+        ...state,
+        ...action,
+    };
 };
 
 const discordBotStatusLabels = {
@@ -359,21 +379,20 @@ function CpuBadge({ cores, speed }: { cores: number; speed: number }) {
     return null;
 }
 
-export default function DiagnosticsPage() {
-    const [section, setSection] = useState<DiagnosticsSectionId>('overview');
-    const [reportModalOpen, setReportModalOpen] = useState(false);
-    const [reportState, setReportState] = useState<'info' | 'loading' | 'success' | 'error'>('info');
-    const [reportId, setReportId] = useState('');
-    const [reportError, setReportError] = useState('');
-    const [botActionState, setBotActionState] = useState<{
-        action: 'restart' | 'reload-addons' | 'resync' | null;
-        error: string;
-        message: string;
-    }>({
-        action: null,
-        error: '',
-        message: '',
+function useDiagnosticsPage() {
+    const [state, dispatch] = useReducer(reduceDiagnosticsPageState, {
+        section: 'overview',
+        reportModalOpen: false,
+        reportState: 'info',
+        reportId: '',
+        reportError: '',
+        botActionState: {
+            action: null,
+            error: '',
+            message: '',
+        },
     });
+    const { section, reportModalOpen, reportState, reportId, reportError, botActionState } = state;
 
     const dataApi = useBackendApi<DiagnosticsData>({
         method: 'GET',
@@ -411,20 +430,24 @@ export default function DiagnosticsPage() {
     });
 
     const handleBotAction = (action: 'restart' | 'reload-addons' | 'resync') => {
-        setBotActionState({
-            action,
-            error: '',
-            message: '',
+        dispatch({
+            botActionState: {
+                action,
+                error: '',
+                message: '',
+            },
         });
 
         botActionApi({
             pathParams: { action },
             timeout: ApiTimeout.LONG,
             success: (response) => {
-                setBotActionState({
-                    action: null,
-                    error: response.error ?? '',
-                    message: response.message ?? '',
+                dispatch({
+                    botActionState: {
+                        action: null,
+                        error: response.error ?? '',
+                        message: response.message ?? '',
+                    },
                 });
 
                 if (response.diagnostics) {
@@ -437,35 +460,37 @@ export default function DiagnosticsPage() {
                 void mutate();
             },
             error: (message) => {
-                setBotActionState({
-                    action: null,
-                    error: message,
-                    message: '',
+                dispatch({
+                    botActionState: {
+                        action: null,
+                        error: message,
+                        message: '',
+                    },
                 });
             },
         });
     };
 
     const handleSendReport = () => {
-        setReportState('loading');
+        dispatch({
+            reportState: 'loading',
+            reportError: '',
+            reportId: '',
+        });
         reportApi({
             data: { bugfix: true },
             timeout: ApiTimeout.REALLY_REALLY_LONG,
             success(d) {
                 if (d.error) {
-                    setReportState('error');
-                    setReportError(d.error);
+                    dispatch({ reportState: 'error', reportError: d.error });
                 } else if (d.reportId) {
-                    setReportState('success');
-                    setReportId(d.reportId);
+                    dispatch({ reportState: 'success', reportId: d.reportId });
                 } else {
-                    setReportState('error');
-                    setReportError('Unknown backend error.');
+                    dispatch({ reportState: 'error', reportError: 'Unknown backend error.' });
                 }
             },
             error(msg) {
-                setReportState('error');
-                setReportError(msg);
+                dispatch({ reportState: 'error', reportError: msg });
             },
         });
     };
@@ -473,7 +498,7 @@ export default function DiagnosticsPage() {
     if (isLoading || (!data && !swrError)) {
         return (
             <div className="flex min-h-96 items-center justify-center">
-                <Loader2Icon className="h-8 w-8 animate-spin" />
+                <Loader2Icon className="size-8 animate-spin" />
             </div>
         );
     }
@@ -515,7 +540,11 @@ export default function DiagnosticsPage() {
                 description="Inspect runtime health, process state, and support data."
             />
 
-            <Tabs value={section} onValueChange={(value) => setSection(value as DiagnosticsSectionId)} className="space-y-4">
+            <Tabs
+                value={section}
+                onValueChange={(value) => dispatch({ section: value as DiagnosticsSectionId })}
+                className="space-y-4"
+            >
                 <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
                     {diagnosticsSections.map((item) => (
                         <TabsTrigger
@@ -733,7 +762,7 @@ export default function DiagnosticsPage() {
                                     disabled={isBotActionLoading || !discordBot.enabled}
                                     onClick={() => handleBotAction('restart')}
                                 >
-                                    {botActionState.action === 'restart' && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
+                                    {botActionState.action === 'restart' && <Loader2Icon className="mr-2 size-4 animate-spin" />}
                                     Restart Runtime
                                 </Button>
                                 <Button
@@ -743,7 +772,7 @@ export default function DiagnosticsPage() {
                                     onClick={() => handleBotAction('reload-addons')}
                                 >
                                     {botActionState.action === 'reload-addons' && (
-                                        <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                                        <Loader2Icon className="mr-2 size-4 animate-spin" />
                                     )}
                                     Retry Addon Load
                                 </Button>
@@ -753,7 +782,7 @@ export default function DiagnosticsPage() {
                                     disabled={isBotActionLoading || !discordBot.enabled}
                                     onClick={() => handleBotAction('resync')}
                                 >
-                                    {botActionState.action === 'resync' && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
+                                    {botActionState.action === 'resync' && <Loader2Icon className="mr-2 size-4 animate-spin" />}
                                     Resync Runtime
                                 </Button>
                             </div>
@@ -895,9 +924,9 @@ export default function DiagnosticsPage() {
                             <p className="text-muted-foreground text-sm">No addon command or event load failures recorded.</p>
                         ) : (
                             <div className="space-y-2">
-                                {discordBot.runtime.addonLoadFailures.map((failure, index) => (
+                                {discordBot.runtime.addonLoadFailures.map((failure) => (
                                     <div
-                                        key={`${failure.kind}-${failure.filePath}-${failure.updatedAt}-${index}`}
+                                        key={`${failure.kind}-${failure.filePath}-${failure.updatedAt}-${failure.addonId ?? 'unknown'}`}
                                         className="rounded-md border border-red-500/25 bg-red-500/5 p-3"
                                     >
                                         <div className="mb-1 flex flex-wrap items-center gap-2">
@@ -990,7 +1019,7 @@ export default function DiagnosticsPage() {
                                         <div key={row.label}>
                                             <div className="mb-1 flex items-center justify-between text-sm">
                                                 <div className="flex items-center gap-1.5">
-                                                    <span className={`inline-block h-2 w-2 rounded-full ${row.colorClass}`} />
+                                                    <span className={`inline-block size-2 rounded-full ${row.colorClass}`} />
                                                     <span>{row.label}</span>
                                                 </div>
                                                 <span className="text-muted-foreground">
@@ -1285,8 +1314,12 @@ export default function DiagnosticsPage() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
-                                    setReportState('info');
-                                    setReportModalOpen(true);
+                                    dispatch({
+                                        reportState: 'info',
+                                        reportError: '',
+                                        reportId: '',
+                                        reportModalOpen: true,
+                                    });
                                 }}
                             >
                                 Review Details & Send Data
@@ -1304,7 +1337,7 @@ export default function DiagnosticsPage() {
             </Tabs>
 
             {/* Report Modal */}
-            <Dialog open={reportModalOpen} onOpenChange={setReportModalOpen}>
+            <Dialog open={reportModalOpen} onOpenChange={(open) => dispatch({ reportModalOpen: open })}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Send Diagnostics Data</DialogTitle>
@@ -1358,7 +1391,7 @@ export default function DiagnosticsPage() {
 
                     {reportState === 'loading' && (
                         <div className="flex min-h-32 items-center justify-center">
-                            <Loader2Icon className="h-8 w-8 animate-spin" />
+                            <Loader2Icon className="size-8 animate-spin" />
                         </div>
                     )}
 
@@ -1380,7 +1413,7 @@ export default function DiagnosticsPage() {
                     )}
 
                     <DialogFooter>
-                        <Button variant="secondary" onClick={() => setReportModalOpen(false)}>
+                        <Button variant="secondary" onClick={() => dispatch({ reportModalOpen: false })}>
                             Close
                         </Button>
                         {reportState === 'info' && (
@@ -1393,4 +1426,8 @@ export default function DiagnosticsPage() {
             </Dialog>
         </div>
     );
+}
+
+export default function DiagnosticsPage() {
+    return useDiagnosticsPage();
 }

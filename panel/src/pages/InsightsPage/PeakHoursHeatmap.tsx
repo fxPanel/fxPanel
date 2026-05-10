@@ -41,31 +41,28 @@ function PeakHoursHeatmap({ cells, maxAvg }: Props) {
             <div className="inline-grid gap-[2px]" style={{ gridTemplateColumns: `auto repeat(24, 1fr)` }}>
                 {/* Hour header row */}
                 <div />
-                {Array.from({ length: 24 }, (_, h) => (
-                    <div key={h} className="text-muted-foreground w-6 text-center text-[10px] select-none">
-                        {h}
+                {Array.from({ length: 24 }, (_, hour) => hour).map((hour) => (
+                    <div key={hour} className="text-muted-foreground w-6 text-center text-[10px] select-none">
+                        {hour}
                     </div>
                 ))}
 
                 {/* Data rows */}
                 {dayLabels.map((label, dow) => (
-                    <Fragment key={`day-${dow}`}>
-                        <div
-                            key={`label-${dow}`}
-                            className="text-muted-foreground flex items-center pr-1 text-[10px] select-none"
-                        >
+                    <Fragment key={`day-${label}`}>
+                        <div className="text-muted-foreground flex items-center pr-1 text-[10px] select-none">
                             {label}
                         </div>
-                        {Array.from({ length: 24 }, (_, hour) => {
+                        {Array.from({ length: 24 }, (_, hour) => hour).map((hour) => {
                             const value = grid[dow][hour];
                             return (
                                 <div
-                                    key={`${dow}-${hour}`}
+                                    key={`${label}-${hour}`}
                                     className="group relative h-5 w-6 cursor-default rounded-sm"
                                     style={{ backgroundColor: getHeatColor(value, maxAvg) }}
                                 >
                                     <div className="bg-card text-card-foreground border-border absolute bottom-full left-1/2 z-50 mb-1 hidden -translate-x-1/2 rounded border px-2 py-1 text-xs whitespace-nowrap shadow-md group-hover:block">
-                                        {label} {String(hour).padStart(2, '0')}:00 — <strong>{value}</strong> avg
+                                        {label} {String(hour).padStart(2, '0')}:00, <strong>{value}</strong> avg
                                         players
                                     </div>
                                 </div>
@@ -79,11 +76,11 @@ function PeakHoursHeatmap({ cells, maxAvg }: Props) {
             <div className="text-muted-foreground mt-2 flex items-center justify-end gap-1 text-[10px]">
                 <span>0</span>
                 <div className="flex h-3 overflow-hidden rounded">
-                    {Array.from({ length: 6 }, (_, i) => (
+                    {Array.from({ length: 6 }, (_, step) => step / 5).map((ratio) => (
                         <div
-                            key={i}
+                            key={`legend-${ratio}`}
                             className="h-3 w-4"
-                            style={{ backgroundColor: getHeatColor((i / 5) * maxAvg, maxAvg) }}
+                            style={{ backgroundColor: getHeatColor(ratio * maxAvg, maxAvg) }}
                         />
                     ))}
                 </div>

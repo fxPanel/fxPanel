@@ -3,7 +3,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useClosePlayerModal } from '@/hooks/playerModal';
 import { ClipboardPasteIcon, ExternalLinkIcon, Loader2Icon } from 'lucide-react';
-import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { useImperativeHandle, useMemo, useRef, useState } from 'react';
 import {
     DropDownSelect,
     DropDownSelectContent,
@@ -34,10 +34,14 @@ type BanFormProps = {
     onNavigateAway?: () => void;
 };
 
+type BanFormComponentProps = BanFormProps & {
+    ref?: React.Ref<BanFormType>;
+};
+
 /**
  * A form to set ban reason and duration.
  */
-export default forwardRef(function BanForm({ disabled, onNavigateAway }: BanFormProps, ref) {
+export default function BanForm({ disabled, onNavigateAway, ref }: BanFormComponentProps) {
     const banTemplates = useBanTemplates();
     const reasonRef = useRef<HTMLInputElement>(null);
     const customMultiplierRef = useRef<HTMLInputElement>(null);
@@ -68,7 +72,7 @@ export default forwardRef(function BanForm({ disabled, onNavigateAway }: BanForm
             focusReason: () => {
                 reasonRef.current?.focus();
             },
-        };
+        } as BanFormType;
     }, [reasonRef, customMultiplierRef, currentDuration, customUnits]);
 
     const handleTemplateSelectChange = (value: string) => {
@@ -99,7 +103,7 @@ export default forwardRef(function BanForm({ disabled, onNavigateAway }: BanForm
     //Ban templates render optimization
     const processedTemplates = useMemo(() => {
         if (!banTemplates) return;
-        return banTemplates.map((template, index) => {
+        return banTemplates.map((template) => {
             const duration = banDurationToShortString(template.duration);
             const reason =
                 template.reason.length > reasonTruncateLength
@@ -107,7 +111,7 @@ export default forwardRef(function BanForm({ disabled, onNavigateAway }: BanForm
                     : template.reason;
             return (
                 <DropDownSelectItem
-                    key={index}
+                    key={template.id}
                     value={template.id}
                     className="focus:bg-secondary focus:text-secondary-foreground"
                 >
@@ -166,7 +170,6 @@ export default forwardRef(function BanForm({ disabled, onNavigateAway }: BanForm
                         placeholder="The reason for the ban, rule violated, etc."
                         className="w-full"
                         disabled={disabled}
-                        autoFocus
                     />
                     <DropDownSelect onValueChange={handleTemplateSelectChange} disabled={disabled}>
                         <DropDownSelectTrigger className="tracking-wide">
@@ -242,4 +245,4 @@ export default forwardRef(function BanForm({ disabled, onNavigateAway }: BanForm
             </div>
         </div>
     );
-});
+}

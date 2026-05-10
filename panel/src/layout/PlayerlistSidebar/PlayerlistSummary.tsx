@@ -8,8 +8,8 @@ export default function PlayerlistSummary() {
 
     return (
         <div className="flex w-full items-center justify-between">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-zinc-600/50">
-                <UsersIcon className="text-opacity-80 h-10 w-10 stroke-1 text-zinc-400" />
+            <div className="flex size-16 items-center justify-center rounded-full bg-zinc-600/50">
+                <UsersIcon className="text-opacity-80 size-10 stroke-1 text-zinc-400" />
             </div>
             <div className="flex flex-col items-end">
                 <div className="font-mono text-4xl font-extralight">{playerCountFormatted}</div>

@@ -29,8 +29,8 @@ type StatRowProps = {
 function StatRow({ icon: Icon, label, value, valueClass, title }: StatRowProps) {
     return (
         <div className="flex items-center gap-3 py-2.5" title={title}>
-            <div className="bg-secondary/50 flex h-7 w-7 shrink-0 items-center justify-center rounded-md">
-                <Icon className="text-muted-foreground/60 h-3.5 w-3.5" />
+            <div className="bg-secondary/50 flex size-7 shrink-0 items-center justify-center rounded-md">
+                <Icon className="text-muted-foreground/60 size-3.5" />
             </div>
             <span className="text-muted-foreground/70 flex-1 text-xs">{label}</span>
             <span className={cn('font-mono text-sm font-semibold', valueClass ?? 'text-foreground')}>{value}</span>
@@ -141,7 +141,7 @@ export default function ServerStatsCard() {
                 <h3 className="text-muted-foreground/50 text-[10px] font-semibold tracking-widest uppercase">
                     Server Stats {titleNode}
                 </h3>
-                <GaugeIcon className="text-muted-foreground/30 h-3.5 w-3.5" />
+                <GaugeIcon className="text-muted-foreground/30 size-3.5" />
             </div>
             {contentNode}
         </div>

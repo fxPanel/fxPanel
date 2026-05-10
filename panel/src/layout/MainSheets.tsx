@@ -12,7 +12,7 @@ import { SidebarNavContent, ServerStatusCard, SidebarUserButton, SidebarCollapse
  * Mobile global menu — mirrors the desktop LeftSidebar (sectioned navigation,
  * server status card, account button) inside a slide-out sheet.
  */
-export function GlobalMenuSheet() {
+function GlobalMenuSheet() {
     const { isSheetOpen, setIsSheetOpen } = useGlobalMenuSheet();
 
     return (
@@ -56,7 +56,7 @@ export function GlobalMenuSheet() {
  * Legacy server-specific sheet — kept for any code paths that still open it,
  * but the mobile header no longer surfaces a button for it.
  */
-export function ServerSidebarSheet() {
+function ServerSidebarSheet() {
     const { isSheetOpen, setIsSheetOpen } = useServerSheet();
     return (
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
@@ -69,7 +69,7 @@ export function ServerSidebarSheet() {
     );
 }
 
-export function PlayersSidebarSheet() {
+function PlayersSidebarSheet() {
     const { isSheetOpen, setIsSheetOpen } = usePlayerlistSheet();
     return (
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>

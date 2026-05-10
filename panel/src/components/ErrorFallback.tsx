@@ -50,7 +50,7 @@ type GenericErrorBoundaryCardProps = {
     resetButton: React.ReactNode;
 };
 
-export function GenericErrorBoundaryCard(props: GenericErrorBoundaryCardProps) {
+function GenericErrorBoundaryCard(props: GenericErrorBoundaryCardProps) {
     const errorMessage = props.error instanceof Error ? props.error.message : String(props.error);
     const errorStack = props.error instanceof Error ? props.error.stack : undefined;
 

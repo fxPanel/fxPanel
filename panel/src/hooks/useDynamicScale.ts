@@ -43,10 +43,12 @@ export function useDynamicScale<C extends HTMLElement, E extends HTMLElement>(op
             if (supportsZoom) {
                 content.style.zoom = '';
             } else {
-                content.style.transform = '';
-                content.style.transformOrigin = '';
-                content.style.width = '';
-                content.style.height = '';
+                Object.assign(content.style, {
+                    transform: '',
+                    transformOrigin: '',
+                    width: '',
+                    height: '',
+                });
             }
         };
 
@@ -93,8 +95,11 @@ export function useDynamicScale<C extends HTMLElement, E extends HTMLElement>(op
                     // `transform: scale()` doesn't affect layout flow, so we
                     // explicitly compensate width/height to avoid scrollbars.
                     content.style.transformOrigin = '0 0';
-                    content.style.transform = `scale(${scale})`;
-                    content.style.width = `${100 / scale}%`;
+                    Object.assign(content.style, {
+                        transformOrigin: '0 0',
+                        transform: `scale(${scale})`,
+                        width: `${100 / scale}%`,
+                    });
                     // Measure height after applying the new width so any
                     // reflow/wrapping caused by the width change is reflected.
                     const naturalH = content.scrollHeight;

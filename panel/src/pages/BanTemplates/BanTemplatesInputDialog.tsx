@@ -47,19 +47,35 @@ export default function BanTemplatesInputDialog({
     //Setting the states
     const reasonRef = useRef<AutosizeTextAreaRef>(null);
     const customMultiplierRef = useRef<HTMLInputElement>(null);
+    const resetTimeoutRef = useRef<number | null>(null);
     const [selectedDuration, setSelectedDuration] = useState(initialSelectedDuration);
     const [customUnits, setCustomUnits] = useState(initialCustomUnits);
 
-    useEffect(() => {
-        const timeout = setTimeout(() => {
-            if (isDialogOpen) return;
-            setSelectedDuration(initialSelectedDuration);
-            setCustomUnits(initialCustomUnits);
-            if (reasonRef.current) reasonRef.current.textArea.value = '';
-            if (customMultiplierRef.current) customMultiplierRef.current.value = '';
+    const clearResetTimeout = () => {
+        if (resetTimeoutRef.current === null) return;
+        clearTimeout(resetTimeoutRef.current);
+        resetTimeoutRef.current = null;
+    };
+
+    const resetFields = () => {
+        setSelectedDuration(initialSelectedDuration);
+        setCustomUnits(initialCustomUnits);
+        if (reasonRef.current) reasonRef.current.textArea.value = '';
+        if (customMultiplierRef.current) customMultiplierRef.current.value = '';
+    };
+
+    useEffect(() => clearResetTimeout, []);
+
+    const handleOpenChange = (isOpen: boolean) => {
+        clearResetTimeout();
+        setIsDialogOpen(isOpen);
+        if (isOpen) return;
+
+        resetTimeoutRef.current = window.setTimeout(() => {
+            resetFields();
+            resetTimeoutRef.current = null;
         }, 500);
-        return () => clearTimeout(timeout);
-    }, [isDialogOpen]);
+    };
 
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -94,7 +110,7 @@ export default function BanTemplatesInputDialog({
     };
 
     return (
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
             <DialogContent className="md:max-w-xl">
                 <form onSubmit={handleSubmit}>
                     <div className="space-y-4">
@@ -113,7 +129,6 @@ export default function BanTemplatesInputDialog({
                                 ref={reasonRef}
                                 maxHeight={160}
                                 minLength={3}
-                                autoFocus
                                 required
                                 onChangeCapture={(e) => {
                                     //prevent breaking line

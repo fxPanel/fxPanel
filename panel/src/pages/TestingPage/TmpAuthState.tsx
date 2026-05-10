@@ -8,24 +8,36 @@ export default function TmpAuthState() {
 
     const toggleIsMaster = () => {
         if (!authData) return;
-        setAuthData({
-            ...authData,
-            isMaster: !authData.isMaster,
-        });
+        setAuthData((prev) =>
+            prev
+                ? {
+                      ...prev,
+                      isMaster: !prev.isMaster,
+                  }
+                : prev,
+        );
     };
     const toggleIsTmpPassword = () => {
         if (!authData) return;
-        setAuthData({
-            ...authData,
-            isTempPassword: !authData.isTempPassword,
-        });
+        setAuthData((prev) =>
+            prev
+                ? {
+                      ...prev,
+                      isTempPassword: !prev.isTempPassword,
+                  }
+                : prev,
+        );
     };
     const changeCsrfToken = () => {
         if (!authData) return;
-        setAuthData({
-            ...authData,
-            csrfToken: Math.random().toString(36).substring(2),
-        });
+        setAuthData((prev) =>
+            prev
+                ? {
+                      ...prev,
+                      csrfToken: Math.random().toString(36).substring(2),
+                  }
+                : prev,
+        );
     };
 
     return (

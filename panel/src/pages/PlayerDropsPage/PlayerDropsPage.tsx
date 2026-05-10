@@ -141,7 +141,7 @@ export default function PlayerDropsPage() {
             {/* Drilldown toolbar */}
             <div className="bg-card/60 border-border/50 flex flex-col gap-2 rounded-xl border px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <div className="flex items-center gap-2 pr-2">
-                    <div className="bg-secondary/40 border-border/50 text-accent/80 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border">
+                    <div className="bg-secondary/40 border-border/50 text-accent/80 flex size-7 shrink-0 items-center justify-center rounded-md border">
                         <CalendarRangeIcon className="size-3.5" />
                     </div>
                     <div className="text-xs">

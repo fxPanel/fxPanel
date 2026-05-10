@@ -13,7 +13,7 @@ interface UseAutosizeTextAreaProps {
     triggerAutoSize: string;
 }
 
-export const useAutosizeTextArea = ({
+const useAutosizeTextArea = ({
     textAreaRef,
     triggerAutoSize,
     maxHeight = Number.MAX_SAFE_INTEGER,
@@ -55,57 +55,54 @@ type AutosizeTextAreaProps = {
     minHeight?: number;
 } & React.TextareaHTMLAttributes<HTMLTextAreaElement>;
 
-export const AutosizeTextarea = React.forwardRef<AutosizeTextAreaRef, AutosizeTextAreaProps>(
-    (
-        {
-            maxHeight = Number.MAX_SAFE_INTEGER,
-            minHeight = 52,
-            className,
-            onChange,
-            value,
-            ...props
-        }: AutosizeTextAreaProps,
-        ref: React.Ref<AutosizeTextAreaRef>,
-    ) => {
-        const textAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
-        const [triggerAutoSize, setTriggerAutoSize] = React.useState('');
+type AutosizeTextareaComponentProps = AutosizeTextAreaProps & {
+    ref?: React.Ref<AutosizeTextAreaRef>;
+};
 
-        useAutosizeTextArea({
-            textAreaRef: textAreaRef.current,
-            triggerAutoSize: triggerAutoSize,
-            maxHeight,
-            minHeight,
-        });
+export const AutosizeTextarea = ({
+    maxHeight = Number.MAX_SAFE_INTEGER,
+    minHeight = 52,
+    className,
+    onChange,
+    value,
+    ref,
+    ...props
+}: AutosizeTextareaComponentProps) => {
+    const textAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
+    const [autoSizeRevision, bumpAutoSizeRevision] = React.useReducer((revision) => revision + 1, 0);
+    const triggerAutoSize = `${String(value ?? props.defaultValue ?? props.placeholder ?? '')}:${autoSizeRevision}`;
 
-        useImperativeHandle(ref, () => ({
-            textArea: textAreaRef.current as HTMLTextAreaElement,
-            maxHeight,
-            minHeight,
-        }));
+    useAutosizeTextArea({
+        textAreaRef: textAreaRef.current,
+        triggerAutoSize: triggerAutoSize,
+        maxHeight,
+        minHeight,
+    });
 
-        React.useEffect(() => {
-            setTriggerAutoSize(value as string);
-        }, [value, props?.defaultValue, props?.placeholder]);
+    useImperativeHandle(ref, () => ({
+        textArea: textAreaRef.current as HTMLTextAreaElement,
+        maxHeight,
+        minHeight,
+    }));
 
-        return (
-            <textarea
-                {...props}
-                value={value}
-                ref={textAreaRef}
-                className={cn(
-                    'border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-[80px] w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
-                    'bg-black/30 placeholder:opacity-50', //TX CUSTOM
-                    //NOTE: check if already available:
-                    // https://developer.mozilla.org/en-US/docs/Web/CSS/field-sizing
-                    // https://tailwindcss.com/docs/v4-beta#field-sizing-utilities
-                    className,
-                )}
-                onChange={(e) => {
-                    setTriggerAutoSize(e.target.value);
-                    onChange?.(e);
-                }}
-            />
-        );
-    },
-);
+    return (
+        <textarea
+            {...props}
+            value={value}
+            ref={textAreaRef}
+            className={cn(
+                'border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-[80px] w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
+                'bg-black/30 placeholder:opacity-50', //TX CUSTOM
+                //NOTE: check if already available:
+                // https://developer.mozilla.org/en-US/docs/Web/CSS/field-sizing
+                // https://tailwindcss.com/docs/v4-beta#field-sizing-utilities
+                className,
+            )}
+            onChange={(e) => {
+                bumpAutoSizeRevision();
+                onChange?.(e);
+            }}
+        />
+    );
+};
 AutosizeTextarea.displayName = 'AutosizeTextarea';

@@ -5,7 +5,7 @@
 author('SomeAussieGamer')
 description('fxPanel - A Replacement for txAdmin built on its source code.')
 repository('https://github.com/SomeAussieGaymer/fxPanel')
-version '0.3.0-Alpha-04'
+version '0.3.0-Alpha-06'
 ui_label 'fxPanel'
 fx_version('cerulean')
 game('common')

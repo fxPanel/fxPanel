@@ -19,6 +19,19 @@ export const useSwipeGestures = () => {
     const isGlobalMenuOpen = useAtomValue(isGlobalMenuSheetOpenAtom);
     const isServerOpen = useAtomValue(isServerSheetOpenAtom);
     const isPlayerlistOpen = useAtomValue(isPlayerlistSheetOpenAtom);
+    const openGlobalMenu = () => {
+        setGlobalMenu(true);
+    };
+    const closeLeftSheets = () => {
+        setGlobalMenu(false);
+        setServer(false);
+    };
+    const openPlayerlist = () => {
+        setPlayerlist(true);
+    };
+    const closePlayerlist = () => {
+        setPlayerlist(false);
+    };
 
     const touchStart = useRef<{ x: number; y: number } | null>(null);
 
@@ -48,16 +61,15 @@ export const useSwipeGestures = () => {
 
             if (isSwipeRight) {
                 if (isPlayerlistOpen) {
-                    setPlayerlist(false);
+                    closePlayerlist();
                 } else if (isFromLeftEdge) {
-                    setGlobalMenu(true);
+                    openGlobalMenu();
                 }
             } else if (isSwipeLeft) {
                 if (isGlobalMenuOpen || isServerOpen) {
-                    setGlobalMenu(false);
-                    setServer(false);
+                    closeLeftSheets();
                 } else if (isFromRightEdge) {
-                    setPlayerlist(true);
+                    openPlayerlist();
                 }
             }
         };

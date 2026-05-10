@@ -19,6 +19,7 @@ import { LogoutReasonHash } from '@/pages/auth/Login';
 import { mutate } from 'swr';
 import { fetchWithTimeout } from './fetch';
 import { offlineWarningAtom } from './useWarningBar';
+import { useCallback } from 'react';
 
 /**
  * Atoms
@@ -90,11 +91,11 @@ export const useAdminPerms = () => {
 //Since this is triggered by a logout notice, we don't need to bother doing a POST /auth/logout
 export const useExpireAuthData = () => {
     const setAuthData = useSetAtom(authDataAtom);
-    return (src = 'unknown', reason = 'unknown', reasonHash = LogoutReasonHash.EXPIRED) => {
+    return useCallback((src = 'unknown', reason = 'unknown', reasonHash = LogoutReasonHash.EXPIRED) => {
         console.log('[useExpireAuthData] Logout notice received:', { src, reason, reasonHash });
         setAuthData(false);
         redirectToLogin(reasonHash);
-    };
+    }, [setAuthData]);
 };
 
 //Generic authentication hook, using it will cause your component to re-render on _any_ auth changes

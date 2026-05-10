@@ -13,6 +13,7 @@ import {
     getPageConfig,
     configsReducer,
     getConfigDiff,
+    reconcileCardPendingSave,
 } from '../utils';
 import SettingsCardShell from '../SettingsCardShell';
 import { txToast } from '@/components/TxToaster';
@@ -58,7 +59,7 @@ export default function ConfigCardBans({ cardCtx, pageCtx }: SettingsCardProps) 
         };
 
         const res = getConfigDiff(cfg, states, overwrites, showAdvanced);
-        pageCtx.setCardPendingSave(res.hasChanges ? cardCtx : null);
+        pageCtx.setCardPendingSave(reconcileCardPendingSave(cardCtx, res.hasChanges));
         return res;
     };
 

@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useReducer, useCallback } from 'react';
 import useSWR from 'swr';
+import { ClientDateText } from '@/components/ClientDateText';
 import { useAuthedFetcher } from '@/hooks/fetch';
 import { useAdminPerms } from '@/hooks/auth';
 import { txToast } from '@/components/TxToaster';
@@ -42,6 +43,63 @@ interface AddonsListResponse {
         maxStorageMb: number;
     };
     error?: string;
+}
+
+type AddonsPageState = {
+    approvalTarget: AddonListItem | null;
+    selectedPerms: string[];
+    reloadingIds: Set<string>;
+    settingsAddonId: string | null;
+    logsAddonId: string | null;
+    revokeTarget: string | null;
+    isScanning: boolean;
+};
+
+type AddonsPageAction =
+    | { type: 'patch'; state: Partial<AddonsPageState> }
+    | { type: 'openApproval'; addon: AddonListItem }
+    | { type: 'togglePermission'; permission: string }
+    | { type: 'startReload'; addonId: string }
+    | { type: 'finishReload'; addonId: string };
+
+const initialAddonsPageState: AddonsPageState = {
+    approvalTarget: null,
+    selectedPerms: [],
+    reloadingIds: new Set(),
+    settingsAddonId: null,
+    logsAddonId: null,
+    revokeTarget: null,
+    isScanning: false,
+};
+
+function reduceAddonsPageState(state: AddonsPageState, action: AddonsPageAction): AddonsPageState {
+    switch (action.type) {
+        case 'patch':
+            return { ...state, ...action.state };
+        case 'openApproval':
+            return {
+                ...state,
+                approvalTarget: action.addon,
+                selectedPerms: [...action.addon.permissions.required, ...action.addon.permissions.optional],
+            };
+        case 'togglePermission':
+            return {
+                ...state,
+                selectedPerms: state.selectedPerms.includes(action.permission)
+                    ? state.selectedPerms.filter((permission) => permission !== action.permission)
+                    : [...state.selectedPerms, action.permission],
+            };
+        case 'startReload':
+            return {
+                ...state,
+                reloadingIds: new Set(state.reloadingIds).add(action.addonId),
+            };
+        case 'finishReload': {
+            const reloadingIds = new Set(state.reloadingIds);
+            reloadingIds.delete(action.addonId);
+            return { ...state, reloadingIds };
+        }
+    }
 }
 
 const permissionDescriptions: Record<string, string> = {
@@ -103,7 +161,7 @@ function AddonCard({
             <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2">
-                        <PackageIcon className="text-muted-foreground h-5 w-5 shrink-0" />
+                        <PackageIcon className="text-muted-foreground size-5 shrink-0" />
                         <div>
                             <CardTitle className="text-base">{addon.name}</CardTitle>
                             <CardDescription className="text-xs">
@@ -116,22 +174,22 @@ function AddonCard({
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7"
+                                className="size-7"
                                 onClick={() => onViewLogs(addon.id)}
                                 title="View Logs"
                             >
-                                <ScrollTextIcon className="h-4 w-4" />
+                                <ScrollTextIcon className="size-4" />
                             </Button>
                         )}
                         {addon.hasSettings && addon.state === 'running' && (
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7"
+                                className="size-7"
                                 onClick={() => onOpenSettings(addon.id)}
                                 title="Addon Settings"
                             >
-                                <SettingsIcon className="h-4 w-4" />
+                                <SettingsIcon className="size-4" />
                             </Button>
                         )}
                         <StateBadge state={addon.state} />
@@ -151,7 +209,7 @@ function AddonCard({
                 {/* Re-approval warning */}
                 {needsReapproval && (
                     <div className="flex items-start gap-2 rounded-md border border-yellow-500/25 bg-yellow-500/10 p-2">
-                        <ShieldAlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                        <ShieldAlertIcon className="mt-0.5 size-4 shrink-0 text-yellow-600 dark:text-yellow-400" />
                         <p className="text-xs text-yellow-700 dark:text-yellow-400">
                             This addon has been updated and requires new permissions. Please re-approve to continue
                             using it.
@@ -162,7 +220,7 @@ function AddonCard({
                 {/* Dependencies display */}
                 {addon.dependencies.length > 0 && (
                     <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                        <LinkIcon className="h-3 w-3 shrink-0" />
+                        <LinkIcon className="size-3 shrink-0" />
                         <span>Depends on: {addon.dependencies.join(', ')}</span>
                     </div>
                 )}
@@ -182,7 +240,7 @@ function AddonCard({
                                 <Badge key={p} variant="outline" className="text-2xs">
                                     {p}
                                     {addon.permissions.granted.includes(p) && (
-                                        <ShieldCheckIcon className="ml-0.5 h-3 w-3 text-green-500" />
+                                        <ShieldCheckIcon className="ml-0.5 size-3 text-green-500" />
                                     )}
                                 </Badge>
                             ))}
@@ -195,7 +253,7 @@ function AddonCard({
                     <div className="flex flex-wrap gap-2 pt-1">
                         {(needsApproval || needsReapproval) && (
                             <Button size="sm" onClick={() => onApprove(addon)}>
-                                <ShieldCheckIcon className="mr-1 h-4 w-4" />
+                                <ShieldCheckIcon className="mr-1 size-4" />
                                 {needsReapproval ? 'Re-approve' : 'Approve'}
                             </Button>
                         )}
@@ -207,15 +265,15 @@ function AddonCard({
                                     onClick={() => onReload(addon.id)}
                                     disabled={isReloading}
                                 >
-                                    <RefreshCwIcon className={`mr-1 h-4 w-4${isReloading ? 'animate-spin' : ''}`} />
-                                    {isReloading ? 'Reloading...' : 'Reload'}
+                                    <RefreshCwIcon className={`mr-1 size-4${isReloading ? 'animate-spin' : ''}`} />
+                                    {isReloading ? 'Reloading…' : 'Reload'}
                                 </Button>
                                 <Button size="sm" variant="outline" onClick={() => onStop(addon.id)}>
-                                    <SquareIcon className="mr-1 h-4 w-4" />
+                                    <SquareIcon className="mr-1 size-4" />
                                     Stop
                                 </Button>
                                 <Button size="sm" variant="destructive" onClick={() => onRevoke(addon.id)}>
-                                    <ShieldXIcon className="mr-1 h-4 w-4" />
+                                    <ShieldXIcon className="mr-1 size-4" />
                                     Revoke
                                 </Button>
                             </>
@@ -223,11 +281,11 @@ function AddonCard({
                         {addon.state === 'stopped' && (
                             <>
                                 <Button size="sm" onClick={() => onStart(addon.id)}>
-                                    <PlayIcon className="mr-1 h-4 w-4" />
+                                    <PlayIcon className="mr-1 size-4" />
                                     Start
                                 </Button>
                                 <Button size="sm" variant="destructive" onClick={() => onRevoke(addon.id)}>
-                                    <ShieldXIcon className="mr-1 h-4 w-4" />
+                                    <ShieldXIcon className="mr-1 size-4" />
                                     Revoke
                                 </Button>
                             </>
@@ -235,7 +293,7 @@ function AddonCard({
                         {(addon.state === 'failed' || addon.state === 'crashed') && (
                             <>
                                 <Button size="sm" onClick={() => onStart(addon.id)}>
-                                    <PlayIcon className="mr-1 h-4 w-4" />
+                                    <PlayIcon className="mr-1 size-4" />
                                     Start
                                 </Button>
                                 <Button
@@ -244,11 +302,11 @@ function AddonCard({
                                     onClick={() => onReload(addon.id)}
                                     disabled={isReloading}
                                 >
-                                    <RefreshCwIcon className={`mr-1 h-4 w-4${isReloading ? 'animate-spin' : ''}`} />
-                                    {isReloading ? 'Reloading...' : 'Reload'}
+                                    <RefreshCwIcon className={`mr-1 size-4${isReloading ? 'animate-spin' : ''}`} />
+                                    {isReloading ? 'Reloading…' : 'Reload'}
                                 </Button>
                                 <Button size="sm" variant="destructive" onClick={() => onRevoke(addon.id)}>
-                                    <ShieldXIcon className="mr-1 h-4 w-4" />
+                                    <ShieldXIcon className="mr-1 size-4" />
                                     Revoke
                                 </Button>
                             </>
@@ -282,7 +340,7 @@ function AddonLogsDialog({ addonId, addonName, onClose }: { addonId: string; add
                 <DialogHeader>
                     <DialogTitle>
                         <div className="flex items-center gap-2">
-                            <ScrollTextIcon className="h-5 w-5" />
+                            <ScrollTextIcon className="size-5" />
                             {addonName} Logs
                         </div>
                     </DialogTitle>
@@ -291,13 +349,15 @@ function AddonLogsDialog({ addonId, addonName, onClose }: { addonId: string; add
                     </DialogDescription>
                 </DialogHeader>
                 <div className="bg-muted/30 min-h-[200px] flex-1 overflow-auto rounded-md border p-3 font-mono text-xs">
-                    {isLoading && <p className="text-muted-foreground">Loading logs...</p>}
+                    {isLoading && <p className="text-muted-foreground">Loading logs…</p>}
                     {!isLoading && logs.length === 0 && <p className="text-muted-foreground">No log entries.</p>}
-                    {logs.map((log, i) => (
-                        <div key={`${log.timestamp}-${i}`} className="flex gap-2 py-0.5">
-                            <span className="text-muted-foreground shrink-0">
-                                {new Date(log.timestamp).toLocaleTimeString()}
-                            </span>
+                    {logs.map((log) => (
+                        <div key={`${log.timestamp}-${log.level}-${log.message}`} className="flex gap-2 py-0.5">
+                            <ClientDateText
+                                className="text-muted-foreground shrink-0"
+                                timestamp={log.timestamp}
+                                formatter={(date) => date.toLocaleTimeString()}
+                            />
                             <span className={`w-12 shrink-0 uppercase ${logLevelColors[log.level] ?? ''}`}>
                                 [{log.level}]
                             </span>
@@ -326,7 +386,7 @@ function AddonSettingsDialog({
                 <DialogHeader>
                     <DialogTitle>
                         <div className="flex items-center gap-2">
-                            <SettingsIcon className="h-5 w-5" />
+                            <SettingsIcon className="size-5" />
                             {addonName} Settings
                         </div>
                     </DialogTitle>
@@ -345,6 +405,247 @@ function AddonSettingsDialog({
     );
 }
 
+function AddonsToolbar({
+    data,
+    addonCount,
+    isReadOnly,
+    isScanning,
+    onScan,
+}: {
+    data?: AddonsListResponse;
+    addonCount: number;
+    isReadOnly: boolean;
+    isScanning: boolean;
+    onScan: () => void;
+}) {
+    return (
+        <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+                <Badge variant={data?.config?.enabled ? 'default' : 'secondary'}>
+                    <PowerIcon className="mr-1 size-3" />
+                    {data?.config?.enabled ? 'Enabled' : 'Disabled'}
+                </Badge>
+                {data?.config && (
+                    <span className="text-muted-foreground text-xs">
+                        {addonCount}/{data.config.maxAddons} addons
+                    </span>
+                )}
+            </div>
+            {!isReadOnly && (
+                <Button size="sm" variant="outline" onClick={onScan} disabled={isScanning}>
+                    <RefreshCwIcon className={`mr-1 size-4${isScanning ? 'animate-spin' : ''}`} />
+                    {isScanning ? 'Scanning…' : 'Rescan Addons'}
+                </Button>
+            )}
+        </div>
+    );
+}
+
+function AddonsLoadingGrid() {
+    return (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((placeholder) => (
+                <Card key={placeholder}>
+                    <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <div className="bg-muted size-5 animate-pulse rounded" />
+                                <div className="space-y-1.5">
+                                    <div className="bg-muted h-4 w-32 animate-pulse rounded" />
+                                    <div className="bg-muted h-3 w-24 animate-pulse rounded" />
+                                </div>
+                            </div>
+                            <div className="bg-muted h-5 w-16 animate-pulse rounded-full" />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-2">
+                            <div className="bg-muted h-4 w-full animate-pulse rounded" />
+                            <div className="bg-muted h-4 w-2/3 animate-pulse rounded" />
+                        </div>
+                    </CardContent>
+                </Card>
+            ))}
+        </div>
+    );
+}
+
+function AddonsEmptyStates({
+    isLoading,
+    data,
+    addonCount,
+}: {
+    isLoading: boolean;
+    data?: AddonsListResponse;
+    addonCount: number;
+}) {
+    if (isLoading) return <AddonsLoadingGrid />;
+
+    if (data?.config && !data.config.enabled) {
+        return (
+            <Card>
+                <CardContent className="flex flex-col items-center gap-2 py-12">
+                    <PowerOffIcon className="text-muted-foreground size-12" />
+                    <p className="text-muted-foreground text-sm font-medium">Addon system is disabled</p>
+                    <p className="text-muted-foreground text-xs">
+                        Enable it in the addon configuration to start using addons.
+                    </p>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    if (data?.config?.enabled && addonCount === 0) {
+        return (
+            <Card>
+                <CardContent className="flex flex-col items-center gap-2 py-12">
+                    <PackageIcon className="text-muted-foreground size-12" />
+                    <p className="text-muted-foreground text-sm">
+                        No addons installed. Place addon folders in the <code>addons/</code> directory.
+                    </p>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    return null;
+}
+
+function AddonSettingsWidgets({ widgets }: { widgets: ReturnType<typeof useAddonWidgets> }) {
+    if (widgets.length === 0) return null;
+
+    return (
+        <div className="space-y-4">
+            <h2 className="text-lg font-semibold">Addon Settings</h2>
+            {widgets.map((widget) => (
+                <Card key={`${widget.addonId}-${widget.slot}`}>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base">{widget.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <widget.Component />
+                    </CardContent>
+                </Card>
+            ))}
+        </div>
+    );
+}
+
+function ApprovalDialog({
+    approvalTarget,
+    selectedPerms,
+    onClose,
+    onTogglePermission,
+    onApprove,
+}: {
+    approvalTarget: AddonListItem | null;
+    selectedPerms: string[];
+    onClose: () => void;
+    onTogglePermission: (permission: string) => void;
+    onApprove: () => void;
+}) {
+    return (
+        <Dialog open={!!approvalTarget} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>
+                        {approvalTarget?.needsReapproval ? 'Re-approve' : 'Approve'} Addon: {approvalTarget?.name}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {approvalTarget?.needsReapproval
+                            ? 'This addon has been updated and requires new permissions. Review the updated permission list below.'
+                            : 'Review and grant permissions for this addon. Required permissions are marked with *.'}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3 py-2">
+                    {approvalTarget?.permissions.required.map((perm) => (
+                        <div key={perm} className="flex items-start gap-2">
+                            <Checkbox id={`perm-${perm}`} checked disabled className="mt-0.5" />
+                            <div>
+                                <Label htmlFor={`perm-${perm}`} className="text-sm">
+                                    {perm} <span className="text-destructive">*required</span>
+                                </Label>
+                                {permissionDescriptions[perm] && (
+                                    <p className="text-muted-foreground mt-0.5 text-xs">
+                                        {permissionDescriptions[perm]}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {approvalTarget?.permissions.optional.map((perm) => (
+                        <div key={perm} className="flex items-start gap-2">
+                            <Checkbox
+                                id={`perm-${perm}`}
+                                checked={selectedPerms.includes(perm)}
+                                onCheckedChange={() => onTogglePermission(perm)}
+                                className="mt-0.5"
+                            />
+                            <div>
+                                <Label htmlFor={`perm-${perm}`} className="text-sm">
+                                    {perm}
+                                </Label>
+                                {permissionDescriptions[perm] && (
+                                    <p className="text-muted-foreground mt-0.5 text-xs">
+                                        {permissionDescriptions[perm]}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button onClick={onApprove}>
+                        <ShieldCheckIcon className="mr-1 size-4" />
+                        Approve
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function RevokeAddonDialog({
+    revokeTarget,
+    addons,
+    onClose,
+    onRevoke,
+}: {
+    revokeTarget: string | null;
+    addons: AddonListItem[];
+    onClose: () => void;
+    onRevoke: (addonId: string) => void;
+}) {
+    return (
+        <Dialog open={!!revokeTarget} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Revoke Addon</DialogTitle>
+                    <DialogDescription>
+                        Are you sure you want to revoke{' '}
+                        <strong>{addons.find((a) => a.id === revokeTarget)?.name ?? revokeTarget}</strong>? This will
+                        stop the addon and remove its approval. You can re-approve it later.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button variant="destructive" onClick={() => revokeTarget && onRevoke(revokeTarget)}>
+                        <ShieldXIcon className="mr-1 size-4" />
+                        Revoke
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function AddonsPage() {
     const { hasPerm } = useAdminPerms();
     const isReadOnly = !hasPerm('all_permissions');
@@ -357,19 +658,19 @@ export default function AddonsPage() {
         { refreshInterval: 10_000 },
     );
 
-    // Approval dialog state
-    const [approvalTarget, setApprovalTarget] = useState<AddonListItem | null>(null);
-    const [selectedPerms, setSelectedPerms] = useState<string[]>([]);
-    const [reloadingIds, setReloadingIds] = useState<Set<string>>(new Set());
-    const [settingsAddonId, setSettingsAddonId] = useState<string | null>(null);
-    const [logsAddonId, setLogsAddonId] = useState<string | null>(null);
-    const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
-    const [isScanning, setIsScanning] = useState(false);
+    const [state, dispatch] = useReducer(reduceAddonsPageState, initialAddonsPageState);
+    const {
+        approvalTarget,
+        selectedPerms,
+        reloadingIds,
+        settingsAddonId,
+        logsAddonId,
+        revokeTarget,
+        isScanning,
+    } = state;
 
     const handleOpenApproval = useCallback((addon: AddonListItem) => {
-        setApprovalTarget(addon);
-        // Pre-select all required + all optional
-        setSelectedPerms([...addon.permissions.required, ...addon.permissions.optional]);
+        dispatch({ type: 'openApproval', addon });
     }, []);
 
     const handleApprove = useCallback(async () => {
@@ -389,7 +690,7 @@ export default function AddonsPage() {
         } catch (err) {
             txToast.error(`Failed to approve addon: ${(err as Error).message}`);
         }
-        setApprovalTarget(null);
+        dispatch({ type: 'patch', state: { approvalTarget: null } });
     }, [approvalTarget, selectedPerms, fetcher, mutate]);
 
     const handleRevoke = useCallback(async (addonId: string) => {
@@ -413,12 +714,12 @@ export default function AddonsPage() {
         } catch (err) {
             txToast.error(`Failed to revoke addon: ${(err as Error).message}`);
         } finally {
-            setRevokeTarget(null);
+            dispatch({ type: 'patch', state: { revokeTarget: null } });
         }
     }, [fetcher, mutate]);
 
     const handleReload = useCallback(async (addonId: string) => {
-        setReloadingIds((prev) => new Set(prev).add(addonId));
+        dispatch({ type: 'startReload', addonId });
         try {
             const resp = await fetcher(`/addons/${addonId}/reload`, { method: 'POST' });
             if (resp.error) {
@@ -435,11 +736,7 @@ export default function AddonsPage() {
         } catch (err) {
             txToast.error(`Failed to reload addon: ${(err as Error).message}`);
         } finally {
-            setReloadingIds((prev) => {
-                const next = new Set(prev);
-                next.delete(addonId);
-                return next;
-            });
+            dispatch({ type: 'finishReload', addonId });
         }
     }, [fetcher, mutate]);
 
@@ -485,11 +782,11 @@ export default function AddonsPage() {
     );
 
     const togglePerm = useCallback((perm: string) => {
-        setSelectedPerms((prev) => (prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]));
+        dispatch({ type: 'togglePermission', permission: perm });
     }, []);
 
     const handleScanAddons = useCallback(async () => {
-        setIsScanning(true);
+        dispatch({ type: 'patch', state: { isScanning: true } });
         try {
             const resp = await fetcher('/addons/reload-all', { method: 'POST' });
             if (resp.error) {
@@ -502,14 +799,14 @@ export default function AddonsPage() {
         } catch (err) {
             txToast.error(`Failed to rescan addons: ${(err as Error).message}`);
         } finally {
-            setIsScanning(false);
+            dispatch({ type: 'patch', state: { isScanning: false } });
         }
     }, [fetcher, mutate]);
 
     if (error) {
         return (
             <div className="flex flex-col items-center justify-center gap-2 p-8">
-                <AlertTriangleIcon className="text-destructive h-8 w-8" />
+                <AlertTriangleIcon className="text-destructive size-8" />
                 <p className="text-destructive">Failed to load addons.</p>
             </div>
         );
@@ -519,75 +816,14 @@ export default function AddonsPage() {
 
     return (
         <div className="flex w-full flex-col gap-4">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Badge variant={data?.config?.enabled ? 'default' : 'secondary'}>
-                        <PowerIcon className="mr-1 h-3 w-3" />
-                        {data?.config?.enabled ? 'Enabled' : 'Disabled'}
-                    </Badge>
-                    {data?.config && (
-                        <span className="text-muted-foreground text-xs">
-                            {addons.length}/{data.config.maxAddons} addons
-                        </span>
-                    )}
-                </div>
-                {!isReadOnly && (
-                    <Button size="sm" variant="outline" onClick={handleScanAddons} disabled={isScanning}>
-                        <RefreshCwIcon className={`mr-1 h-4 w-4${isScanning ? 'animate-spin' : ''}`} />
-                        {isScanning ? 'Scanning...' : 'Rescan Addons'}
-                    </Button>
-                )}
-            </div>
-
-            {isLoading && (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {[1, 2, 3].map((i) => (
-                        <Card key={i}>
-                            <CardHeader className="pb-3">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="flex items-center gap-2">
-                                        <div className="bg-muted h-5 w-5 animate-pulse rounded" />
-                                        <div className="space-y-1.5">
-                                            <div className="bg-muted h-4 w-32 animate-pulse rounded" />
-                                            <div className="bg-muted h-3 w-24 animate-pulse rounded" />
-                                        </div>
-                                    </div>
-                                    <div className="bg-muted h-5 w-16 animate-pulse rounded-full" />
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-2">
-                                    <div className="bg-muted h-4 w-full animate-pulse rounded" />
-                                    <div className="bg-muted h-4 w-2/3 animate-pulse rounded" />
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            )}
-
-            {!isLoading && data?.config && !data.config.enabled && (
-                <Card>
-                    <CardContent className="flex flex-col items-center gap-2 py-12">
-                        <PowerOffIcon className="text-muted-foreground h-12 w-12" />
-                        <p className="text-muted-foreground text-sm font-medium">Addon system is disabled</p>
-                        <p className="text-muted-foreground text-xs">
-                            Enable it in the addon configuration to start using addons.
-                        </p>
-                    </CardContent>
-                </Card>
-            )}
-
-            {!isLoading && data?.config?.enabled && addons.length === 0 && (
-                <Card>
-                    <CardContent className="flex flex-col items-center gap-2 py-12">
-                        <PackageIcon className="text-muted-foreground h-12 w-12" />
-                        <p className="text-muted-foreground text-sm">
-                            No addons installed. Place addon folders in the <code>addons/</code> directory.
-                        </p>
-                    </CardContent>
-                </Card>
-            )}
+            <AddonsToolbar
+                data={data}
+                addonCount={addons.length}
+                isReadOnly={isReadOnly}
+                isScanning={isScanning}
+                onScan={handleScanAddons}
+            />
+            <AddonsEmptyStates isLoading={isLoading} data={data} addonCount={addons.length} />
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {addons.map((addon) => (
@@ -595,139 +831,49 @@ export default function AddonsPage() {
                         key={addon.id}
                         addon={addon}
                         onApprove={handleOpenApproval}
-                        onRevoke={setRevokeTarget}
+                        onRevoke={(revokeTarget) => dispatch({ type: 'patch', state: { revokeTarget } })}
                         onReload={handleReload}
                         onStop={handleStop}
                         onStart={handleStart}
-                        onOpenSettings={setSettingsAddonId}
-                        onViewLogs={setLogsAddonId}
+                        onOpenSettings={(settingsAddonId) => dispatch({ type: 'patch', state: { settingsAddonId } })}
+                        onViewLogs={(logsAddonId) => dispatch({ type: 'patch', state: { logsAddonId } })}
                         isReloading={reloadingIds.has(addon.id)}
                         isReadOnly={isReadOnly}
                     />
                 ))}
             </div>
 
-            {/* Addon Settings Widgets */}
-            {settingsWidgets.length > 0 && (
-                <div className="space-y-4">
-                    <h2 className="text-lg font-semibold">Addon Settings</h2>
-                    {settingsWidgets.map((widget) => (
-                        <Card key={`${widget.addonId}-${widget.slot}`}>
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-base">{widget.title}</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <widget.Component />
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            )}
+            <AddonSettingsWidgets widgets={settingsWidgets} />
+            <ApprovalDialog
+                approvalTarget={approvalTarget}
+                selectedPerms={selectedPerms}
+                onClose={() => dispatch({ type: 'patch', state: { approvalTarget: null } })}
+                onTogglePermission={togglePerm}
+                onApprove={handleApprove}
+            />
 
-            {/* Approval Dialog */}
-            <Dialog open={!!approvalTarget} onOpenChange={(open) => !open && setApprovalTarget(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>
-                            {approvalTarget?.needsReapproval ? 'Re-approve' : 'Approve'} Addon: {approvalTarget?.name}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {approvalTarget?.needsReapproval
-                                ? 'This addon has been updated and requires new permissions. Review the updated permission list below.'
-                                : 'Review and grant permissions for this addon. Required permissions are marked with *.'}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-3 py-2">
-                        {approvalTarget?.permissions.required.map((perm) => (
-                            <div key={perm} className="flex items-start gap-2">
-                                <Checkbox id={`perm-${perm}`} checked disabled className="mt-0.5" />
-                                <div>
-                                    <Label htmlFor={`perm-${perm}`} className="text-sm">
-                                        {perm} <span className="text-destructive">*required</span>
-                                    </Label>
-                                    {permissionDescriptions[perm] && (
-                                        <p className="text-muted-foreground mt-0.5 text-xs">
-                                            {permissionDescriptions[perm]}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                        {approvalTarget?.permissions.optional.map((perm) => (
-                            <div key={perm} className="flex items-start gap-2">
-                                <Checkbox
-                                    id={`perm-${perm}`}
-                                    checked={selectedPerms.includes(perm)}
-                                    onCheckedChange={() => togglePerm(perm)}
-                                    className="mt-0.5"
-                                />
-                                <div>
-                                    <Label htmlFor={`perm-${perm}`} className="text-sm">
-                                        {perm}
-                                    </Label>
-                                    {permissionDescriptions[perm] && (
-                                        <p className="text-muted-foreground mt-0.5 text-xs">
-                                            {permissionDescriptions[perm]}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setApprovalTarget(null)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleApprove}>
-                            <ShieldCheckIcon className="mr-1 h-4 w-4" />
-                            Approve
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Addon Settings Dialog */}
             {settingsAddonId && (
                 <AddonSettingsDialog
                     addonId={settingsAddonId}
                     addonName={addons.find((a) => a.id === settingsAddonId)?.name ?? settingsAddonId}
-                    onClose={() => setSettingsAddonId(null)}
+                    onClose={() => dispatch({ type: 'patch', state: { settingsAddonId: null } })}
                 />
             )}
 
-            {/* Addon Logs Dialog */}
             {logsAddonId && (
                 <AddonLogsDialog
                     addonId={logsAddonId}
                     addonName={addons.find((a) => a.id === logsAddonId)?.name ?? logsAddonId}
-                    onClose={() => setLogsAddonId(null)}
+                    onClose={() => dispatch({ type: 'patch', state: { logsAddonId: null } })}
                 />
             )}
 
-            {/* Revoke Confirmation Dialog */}
-            <Dialog open={!!revokeTarget} onOpenChange={(open) => !open && setRevokeTarget(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Revoke Addon</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to revoke{' '}
-                            <strong>{addons.find((a) => a.id === revokeTarget)?.name ?? revokeTarget}</strong>? This
-                            will stop the addon and remove its approval. You can re-approve it later.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setRevokeTarget(null)}>
-                            Cancel
-                        </Button>
-                        <Button variant="destructive" onClick={() => revokeTarget && handleRevoke(revokeTarget)}>
-                            <ShieldXIcon className="mr-1 h-4 w-4" />
-                            Revoke
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <RevokeAddonDialog
+                revokeTarget={revokeTarget}
+                addons={addons}
+                onClose={() => dispatch({ type: 'patch', state: { revokeTarget: null } })}
+                onRevoke={handleRevoke}
+            />
         </div>
     );
 }

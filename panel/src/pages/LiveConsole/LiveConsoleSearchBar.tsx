@@ -2,7 +2,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { ISearchDecorationOptions, ISearchOptions, SearchAddon } from '@xterm/addon-search';
 import { ArrowDownIcon, ArrowUpIcon, CaseSensitiveIcon, RegexIcon, WholeWordIcon, XIcon } from 'lucide-react';
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useEventListener } from 'usehooks-ts';
 
 type ButtonProps = {
@@ -38,17 +38,20 @@ const xtermDecorations = {
 } satisfies ISearchDecorationOptions;
 
 type LiveConsoleSearchBarProps = {
-    show: boolean;
     setShow: (show: boolean) => void;
     searchAddon: SearchAddon;
 };
 
-export default function LiveConsoleSearchBar({ show, setShow, searchAddon }: LiveConsoleSearchBarProps) {
+export default function LiveConsoleSearchBar({ setShow, searchAddon }: LiveConsoleSearchBarProps) {
     const [caseSensitive, setCaseSensitive] = useState(false);
     const [wholeWord, setWholeWord] = useState(false);
     const [regex, setRegex] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const [resultCount, setResultCount] = useState(labelNoResults);
+    const handleInputRef = useCallback((node: HTMLInputElement | null) => {
+        inputRef.current = node;
+        node?.focus();
+    }, []);
 
     //helpers
     const clearSearchState = (newStatus?: string) => {
@@ -65,14 +68,11 @@ export default function LiveConsoleSearchBar({ show, setShow, searchAddon }: Liv
         ...overrides,
     });
 
-    //autofocus the input
     useEffect(() => {
-        if (show) {
-            inputRef.current?.focus();
-        } else {
+        return () => {
             clearSearchState(labelNoResults);
-        }
-    }, [show]);
+        };
+    }, [searchAddon]);
 
     //listens to the result count change
     useEffect(() => {
@@ -145,12 +145,11 @@ export default function LiveConsoleSearchBar({ show, setShow, searchAddon }: Liv
         }
     });
 
-    if (!show) return null;
     return (
         <div className="xs:right-4 bg-secondary xs:gap-4 xs:w-auto absolute top-0 z-10 flex w-full flex-wrap items-center justify-center gap-1 rounded-b-lg border border-t-0 p-1 shadow-xl">
             <div className="relative">
                 <Input
-                    ref={inputRef}
+                    ref={handleInputRef}
                     className="h-8"
                     placeholder="Search string"
                     onKeyDown={handleInputKeyDown}
@@ -161,10 +160,10 @@ export default function LiveConsoleSearchBar({ show, setShow, searchAddon }: Liv
                 />
                 <div className="text-muted-foreground absolute top-1/2 right-1 flex -translate-y-1/2 transform gap-2">
                     <SearchBarButton title="Case Sensitive" isActive={caseSensitive} onClick={handleCaseSensitiveMode}>
-                        <CaseSensitiveIcon className="h-5 w-5" />
+                        <CaseSensitiveIcon className="size-5" />
                     </SearchBarButton>
                     <SearchBarButton title="Whole Word" isActive={wholeWord} onClick={handleWholeWordMode}>
-                        <WholeWordIcon className="h-5 w-5" />
+                        <WholeWordIcon className="size-5" />
                     </SearchBarButton>
                     <SearchBarButton title="Regex" isActive={regex} onClick={handleRegexMode}>
                         <RegexIcon className="h-4 w-5" />
@@ -174,18 +173,19 @@ export default function LiveConsoleSearchBar({ show, setShow, searchAddon }: Liv
             <div className="text-muted-foreground flex min-w-[8ch] grow text-sm whitespace-nowrap">{resultCount}</div>
             <div className="text-muted-foreground flex gap-2">
                 <SearchBarButton title="Previous" onClick={handlePrevious}>
-                    <ArrowUpIcon className="h-5 w-5" />
+                    <ArrowUpIcon className="size-5" />
                 </SearchBarButton>
                 <SearchBarButton title="Next" onClick={handleNext}>
-                    <ArrowDownIcon className="h-5 w-5" />
+                    <ArrowDownIcon className="size-5" />
                 </SearchBarButton>
                 <SearchBarButton
                     title="Close"
                     onClick={() => {
+                        clearSearchState(labelNoResults);
                         setShow(false);
                     }}
                 >
-                    <XIcon className="h-5 w-5" />
+                    <XIcon className="size-5" />
                 </SearchBarButton>
             </div>
         </div>

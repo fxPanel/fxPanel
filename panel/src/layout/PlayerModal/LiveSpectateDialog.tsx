@@ -49,14 +49,18 @@ export default function LiveSpectateDialog({
 
         socket.on('spectateFrame', handleFrame);
 
-        cleanupRef.current = () => {
+        const cleanup = () => {
             socket.off('spectateFrame', handleFrame);
             socket.emit('leaveSpectate' as any, sessionId);
         };
 
+        cleanupRef.current = cleanup;
+
         return () => {
-            cleanupRef.current?.();
-            cleanupRef.current = null;
+            cleanup();
+            if (cleanupRef.current === cleanup) {
+                cleanupRef.current = null;
+            }
         };
     }, [open, sessionId]);
 
@@ -83,7 +87,7 @@ export default function LiveSpectateDialog({
             <DialogContent className="max-w-5xl [&>button.absolute]:hidden">
                 <DialogHeader>
                     <div className="flex items-center justify-between">
-                        <DialogTitle>Live Spectate — {playerName}</DialogTitle>
+                        <DialogTitle>Live Spectate: {playerName}</DialogTitle>
                         <DialogDescription className="sr-only">
                             Live spectate stream of player {playerName}
                         </DialogDescription>
@@ -92,11 +96,11 @@ export default function LiveSpectateDialog({
                         </Button>
                     </div>
                 </DialogHeader>
-                <div className="flex min-h-[400px] items-center justify-center rounded-lg bg-black">
+                <div className="flex min-h-[400px] items-center justify-center rounded-lg bg-zinc-950">
                     {!currentFrame && !error && !connectionTimedOut && (
                         <div className="text-muted-foreground flex flex-col items-center gap-2">
-                            <Loader2Icon className="h-8 w-8 animate-spin" />
-                            <span className="text-sm">Connecting to live stream...</span>
+                            <Loader2Icon className="size-8 animate-spin" />
+                            <span className="text-sm">Connecting to live stream…</span>
                         </div>
                     )}
                     {(error || connectionTimedOut) && (

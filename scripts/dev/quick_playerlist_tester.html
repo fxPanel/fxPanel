@@ -1,4 +1,9 @@
 <title>Playerlist Tester</title>
+<!--
+  /dev routes require apiAuthMw: session cookie + x-txadmin-csrftoken header + master permission.
+  This standalone page cannot satisfy CSRF; use the panel devtools Network tab to replay a request,
+  or call /dev from an authenticated panel context (e.g. extend the panel dev harness).
+-->
 <style>
     body {
         margin: 0;

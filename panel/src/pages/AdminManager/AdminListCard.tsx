@@ -71,6 +71,20 @@ export default function AdminListCard({
     const showManageActions = canManage && !admin.isYou && !admin.isMaster;
     const showMenu = !selectMode;
     const canSelect = !!selectMode && !admin.isMaster && !admin.isYou;
+    const selectableCardProps = canSelect
+        ? {
+              onClick: onToggleSelect,
+              tabIndex: 0,
+              role: 'button' as const,
+              'aria-pressed': !!isSelected,
+              onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                      if (e.key === ' ') e.preventDefault();
+                      onToggleSelect();
+                  }
+              },
+          }
+        : {};
 
     return (
         <div
@@ -81,20 +95,7 @@ export default function AdminListCard({
                 selectMode && !canSelect && 'opacity-60',
                 isSelected && 'ring-primary/70 border-primary/60 ring-2',
             )}
-            onClick={canSelect ? onToggleSelect : undefined}
-            tabIndex={canSelect ? 0 : undefined}
-            role={canSelect ? 'button' : undefined}
-            aria-pressed={canSelect ? !!isSelected : undefined}
-            onKeyDown={
-                canSelect
-                    ? (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                              if (e.key === ' ') e.preventDefault();
-                              onToggleSelect();
-                          }
-                      }
-                    : undefined
-            }
+            {...selectableCardProps}
         >
             {/* ── Top row: avatar + name + menu ── */}
             <div className="flex items-start gap-3">
@@ -116,11 +117,11 @@ export default function AdminListCard({
 
                 {/* Avatar tile */}
                 <div className="relative shrink-0">
-                    <Avatar username={admin.name} className="h-11 w-11 rounded-lg text-sm font-bold" />
+                    <Avatar username={admin.name} className="size-11 rounded-lg text-sm font-bold" />
                     {!selectMode && (
                         <span
                             className={cn(
-                                'border-card absolute -right-1 -bottom-1 h-3 w-3 rounded-full border-2',
+                                'border-card absolute -right-1 -bottom-1 size-3 rounded-full border-2',
                                 admin.isOnline ? 'bg-success' : 'bg-muted-foreground/40',
                             )}
                             title={admin.isOnline ? 'Online (in-game)' : 'Offline'}
@@ -134,7 +135,7 @@ export default function AdminListCard({
                         <span className="truncate text-sm font-semibold">{admin.name}</span>
                         {admin.isMaster && (
                             <CrownIcon
-                                className="h-3.5 w-3.5 shrink-0 text-amber-400/80"
+                                className="size-3.5 shrink-0 text-amber-400/80"
                                 role="img"
                                 aria-label="Master account"
                             />
@@ -147,7 +148,7 @@ export default function AdminListCard({
                             </span>
                         )}
                         <span className="text-muted-foreground/70 inline-flex items-center gap-1 text-[11px]">
-                            <ShieldCheckIcon className="h-3 w-3" aria-hidden="true" />
+                            <ShieldCheckIcon className="size-3" aria-hidden="true" />
                             {permLabel}
                         </span>
                     </div>
@@ -160,26 +161,26 @@ export default function AdminListCard({
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="text-muted-foreground/60 hover:text-foreground -mt-1 -mr-1 h-7 w-7 shrink-0"
+                                className="text-muted-foreground/60 hover:text-foreground -mt-1 -mr-1 size-7 shrink-0"
                                 onClick={(e) => e.stopPropagation()}
                             >
-                                <MoreVerticalIcon className="h-4 w-4" />
+                                <MoreVerticalIcon className="size-4" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => setShowStats(true)} className="gap-2">
-                                <BarChart3Icon className="h-3.5 w-3.5" />
+                                <BarChart3Icon className="size-3.5" />
                                 Stats
                             </DropdownMenuItem>
                             {showManageActions && (
                                 <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={onEdit} className="gap-2">
-                                        <PencilIcon className="h-3.5 w-3.5" />
+                                        <PencilIcon className="size-3.5" />
                                         Edit
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={onResetPassword} className="gap-2">
-                                        <RotateCcwIcon className="h-3.5 w-3.5" />
+                                        <RotateCcwIcon className="size-3.5" />
                                         Reset Password
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -187,7 +188,7 @@ export default function AdminListCard({
                                         onClick={onDelete}
                                         className="text-destructive focus:text-destructive gap-2"
                                     >
-                                        <TrashIcon className="h-3.5 w-3.5" />
+                                        <TrashIcon className="size-3.5" />
                                         Delete
                                     </DropdownMenuItem>
                                 </>
@@ -204,7 +205,7 @@ export default function AdminListCard({
                         variant="outline"
                         className="border-border/60 bg-background/40 text-muted-foreground gap-1 text-[10px] font-medium"
                     >
-                        <KeyIcon className="h-3 w-3" />
+                        <KeyIcon className="size-3" />
                         Cfx.re
                     </Badge>
                 )}
@@ -213,7 +214,7 @@ export default function AdminListCard({
                         variant="outline"
                         className="border-border/60 bg-background/40 text-muted-foreground gap-1 text-[10px] font-medium"
                     >
-                        <MessageSquareIcon className="h-3 w-3" />
+                        <MessageSquareIcon className="size-3" />
                         Discord
                     </Badge>
                 )}

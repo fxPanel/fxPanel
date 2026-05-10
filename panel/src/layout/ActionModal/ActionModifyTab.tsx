@@ -40,7 +40,7 @@ export default function ActionModifyTab({ action, refreshModalData }: ActionModi
                 actionId: action.id,
                 ...(revokeReason.trim() ? { reason: revokeReason.trim() } : {}),
             },
-            toastLoadingMessage: `Revoking ${action.type}...`,
+            toastLoadingMessage: `Revoking ${action.type}…`,
             genericHandler: {
                 successMsg: `${upperCasedType} revoked.`,
             },
@@ -75,7 +75,7 @@ export default function ActionModifyTab({ action, refreshModalData }: ActionModi
                 setIsDeleting(true);
                 deleteActionApi({
                     data: { actionId: action.id },
-                    toastLoadingMessage: `Deleting ${action.type}...`,
+                    toastLoadingMessage: `Deleting ${action.type}…`,
                     genericHandler: {
                         successMsg: `${upperCasedType} deleted.`,
                     },
@@ -125,7 +125,7 @@ export default function ActionModifyTab({ action, refreshModalData }: ActionModi
                 >
                     {isRevoking ? (
                         <span className="flex items-center leading-relaxed">
-                            <Loader2Icon className="inline h-4 animate-spin" /> Revoking...
+                            <Loader2Icon className="inline h-4 animate-spin" /> Revoking…
                         </span>
                     ) : (
                         revokeBtnLabel
@@ -151,7 +151,7 @@ export default function ActionModifyTab({ action, refreshModalData }: ActionModi
                     >
                         {isDeleting ? (
                             <span className="flex items-center leading-relaxed">
-                                <Loader2Icon className="inline h-4 animate-spin" /> Deleting...
+                                <Loader2Icon className="inline h-4 animate-spin" /> Deleting…
                             </span>
                         ) : hasDeletePerm ? (
                             `Delete ${upperCasedType}`

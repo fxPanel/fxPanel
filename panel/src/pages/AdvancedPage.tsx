@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useBackendApi } from '@/hooks/fetch';
 import { txToast } from '@/components/TxToaster';
 import { Button } from '@/components/ui/button';
@@ -26,9 +26,10 @@ export default function AdvancedPage() {
     const [isRunning, setIsRunning] = useState(false);
     const [devMockStatusEnabled, setDevMockStatusEnabled] = useState(() => isDevMockStatusOptInEnabled());
 
-    useEffect(() => {
-        setDevMockStatusOptInEnabled(devMockStatusEnabled);
-    }, [devMockStatusEnabled]);
+    const handleDevMockStatusChange = (enabled: boolean) => {
+        setDevMockStatusEnabled(enabled);
+        setDevMockStatusOptInEnabled(enabled);
+    };
 
     const dataApi = useBackendApi<AdvancedDataResp>({
         method: 'GET',
@@ -129,7 +130,7 @@ export default function AdvancedPage() {
                             <div className="mt-2 flex items-center justify-center gap-3">
                                 <Switch
                                     checked={devMockStatusEnabled}
-                                    onCheckedChange={setDevMockStatusEnabled}
+                                    onCheckedChange={handleDevMockStatusChange}
                                     aria-label="Enable mock status data"
                                 />
                                 <span className="text-sm font-medium">
@@ -152,7 +153,7 @@ export default function AdvancedPage() {
                                     disabled={isRunning}
                                     onClick={() => handleAction('change_verbosity', 'false')}
                                 >
-                                    {isRunning && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
+                                    {isRunning && <Loader2Icon className="mr-2 size-4 animate-spin" />}
                                     Disable Verbosity
                                 </Button>
                             ) : (
@@ -162,7 +163,7 @@ export default function AdvancedPage() {
                                     disabled={isRunning}
                                     onClick={() => handleAction('change_verbosity', 'true')}
                                 >
-                                    {isRunning && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
+                                    {isRunning && <Loader2Icon className="mr-2 size-4 animate-spin" />}
                                     Enable Verbosity
                                 </Button>
                             )}
@@ -181,7 +182,7 @@ export default function AdvancedPage() {
                                 disabled={isRunning}
                                 onClick={() => handleAction('profile_monitor')}
                             >
-                                {isRunning && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
+                                {isRunning && <Loader2Icon className="mr-2 size-4 animate-spin" />}
                                 Profile Monitor
                             </Button>
                         </div>
@@ -216,7 +217,7 @@ export default function AdvancedPage() {
                                     });
                                 }}
                             >
-                                {isRunning && <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />}
+                                {isRunning && <Loader2Icon className="mr-2 size-4 animate-spin" />}
                                 Magic Button
                             </Button>
                         </div>

@@ -570,9 +570,10 @@ export default class FxMonitor {
             } catch (error) {
                 console.error(`Failed to save server icon: ${emsg(error) ?? 'Unknown error'}`);
             }
-        } else {
-            txCore.cacheStore.delete(iconCacheKey);
         }
+        // If the server does not advertise an icon in info.json, keep any existing
+        // cached filename (e.g. from `load_server_icon` in server.cfg) so the login
+        // page and panel branding do not lose the configured icon after boot.
 
         //Upserts the runtime data
         txCore.cacheStore.upsert('fxsRuntime:bannerConnecting', infoJson.bannerConnecting);

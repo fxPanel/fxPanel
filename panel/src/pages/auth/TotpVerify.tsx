@@ -12,6 +12,7 @@ import { fetchWithTimeout } from '@/hooks/fetch';
 export default function TotpVerify() {
     const { setAuthData } = useAuth();
     const codeRef = useRef<HTMLInputElement>(null);
+    const [code, setCode] = useState('');
     const [errorMessage, setErrorMessage] = useState<string | undefined>();
     const [isFetching, setIsFetching] = useState(false);
     const setLocation = useLocation()[1];
@@ -21,14 +22,14 @@ export default function TotpVerify() {
     }, []);
 
     const handleVerify = async () => {
-        const code = codeRef.current?.value?.trim() ?? '';
-        if (!code) return;
+        const trimmedCode = code.trim();
+        if (!trimmedCode) return;
 
         try {
             setIsFetching(true);
             const data = await fetchWithTimeout<ApiTotpVerifyResp>('/auth/totp/verify', {
                 method: 'POST',
-                body: { code },
+                body: { code: trimmedCode },
             });
             if ('error' in data) {
                 setErrorMessage(data.error);
@@ -47,16 +48,10 @@ export default function TotpVerify() {
     };
 
     return (
-        <form
-            onSubmit={(e) => {
-                e.preventDefault();
-                handleVerify();
-            }}
-            className="w-full rounded-[inherit]"
-        >
+        <form action={handleVerify} className="w-full rounded-[inherit]">
             <CardHeader className="rounded-t-[inherit]">
                 <CardTitle className="flex flex-col items-center gap-2 text-center">
-                    <ShieldCheckIcon className="text-primary h-8 w-8" />
+                    <ShieldCheckIcon className="text-primary size-8" />
                     <span className="text-xl font-semibold">Two-Factor Authentication</span>
                 </CardTitle>
             </CardHeader>
@@ -83,15 +78,19 @@ export default function TotpVerify() {
                         autoComplete="one-time-code"
                         maxLength={32}
                         required
-                        onChange={() => setErrorMessage(undefined)}
+                        value={code}
+                        onChange={(e) => {
+                            setCode(e.target.value);
+                            setErrorMessage(undefined);
+                        }}
                     />
                 </div>
 
                 <Button variant="outline" disabled={isFetching}>
                     {isFetching ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="mr-2 size-4 animate-spin" />
                     ) : (
-                        <ShieldCheckIcon className="mr-2 inline h-4 w-4" />
+                        <ShieldCheckIcon className="mr-2 inline size-4" />
                     )}{' '}
                     Verify
                 </Button>
