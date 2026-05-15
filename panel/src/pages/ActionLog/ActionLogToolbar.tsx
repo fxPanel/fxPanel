@@ -98,12 +98,12 @@ export default function ActionLogToolbar({
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button variant="default" size="xs" onClick={toggleLive} className="gap-1.5">
-                                <RadioIcon className="h-3.5 w-3.5" />
+                                <RadioIcon className="size-3.5" />
                                 <span>Live</span>
                                 {isConnected && (
-                                    <span className="relative flex h-2 w-2">
+                                    <span className="relative flex size-2">
                                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-                                        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                                        <span className="relative inline-flex size-2 rounded-full bg-green-500" />
                                     </span>
                                 )}
                             </Button>
@@ -114,7 +114,7 @@ export default function ActionLogToolbar({
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button variant="outline" size="xs" onClick={goLive} className="gap-1.5">
-                                <PauseIcon className="h-3.5 w-3.5" />
+                                <PauseIcon className="size-3.5" />
                                 <span>Paused</span>
                             </Button>
                         </TooltipTrigger>
@@ -135,7 +135,7 @@ export default function ActionLogToolbar({
                         }}
                     >
                         <SelectTrigger className="h-7 w-auto min-w-36 gap-1 text-xs">
-                            <HistoryIcon className="h-3.5 w-3.5 shrink-0" />
+                            <HistoryIcon className="size-3.5 shrink-0" />
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -155,7 +155,7 @@ export default function ActionLogToolbar({
 
                 {/* Search */}
                 <div className="relative max-w-xs min-w-40 flex-1">
-                    <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
+                    <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
                     <Input
                         placeholder="Search actions..."
                         value={searchText}
@@ -168,7 +168,7 @@ export default function ActionLogToolbar({
                             className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
                             onClick={() => setSearchText('')}
                         >
-                            <XIcon className="h-3.5 w-3.5" />
+                            <XIcon className="size-3.5" />
                         </button>
                     )}
                 </div>
@@ -180,9 +180,9 @@ export default function ActionLogToolbar({
                         className="hover:bg-destructive/20 cursor-pointer gap-1"
                         onClick={() => setAdminFilter(null)}
                     >
-                        <UserIcon className="h-3 w-3" />
+                        <UserIcon className="size-3" />
                         {adminFilter}
-                        <XIcon className="h-3 w-3" />
+                        <XIcon className="size-3" />
                     </Badge>
                 )}
 
@@ -192,19 +192,19 @@ export default function ActionLogToolbar({
                 {/* Jump to time */}
                 {showJumpInput ? (
                     <div className="flex items-center gap-1">
-                        <Input ref={jumpInputRef} type="datetime-local" className="h-7 w-48 text-xs" autoFocus />
+                        <Input ref={jumpInputRef} type="datetime-local" className="h-7 w-48 text-xs" />
                         <Button size="xs" variant="default" onClick={handleJump}>
-                            Go
+                            Jump
                         </Button>
                         <Button size="xs" variant="ghost" onClick={() => setShowJumpInput(false)}>
-                            <XIcon className="h-3.5 w-3.5" />
+                            <XIcon className="size-3.5" />
                         </Button>
                     </div>
                 ) : (
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button variant="ghost" size="xs" onClick={() => setShowJumpInput(true)}>
-                                <ClockIcon className="h-3.5 w-3.5" />
+                                <ClockIcon className="size-3.5" />
                             </Button>
                         </TooltipTrigger>
                         <TooltipContent>Jump to time</TooltipContent>
@@ -215,7 +215,7 @@ export default function ActionLogToolbar({
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button variant="ghost" size="xs" onClick={() => openExternalLink('/logs/system/download')}>
-                            <DownloadIcon className="h-3.5 w-3.5" />
+                            <DownloadIcon className="size-3.5" />
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent>Download log</TooltipContent>
@@ -240,7 +240,7 @@ export default function ActionLogToolbar({
                                     : 'text-muted-foreground/50 hover:border-border border-transparent bg-transparent',
                             )}
                         >
-                            {Icon && <Icon className={cn('h-3 w-3', active ? filter.color : '')} />}
+                            {Icon && <Icon className={cn('size-3', active ? filter.color : '')} />}
                             <span>{filter.label}</span>
                             <span
                                 className={cn(
@@ -264,9 +264,9 @@ export default function ActionLogToolbar({
                             className="text-muted-foreground hover:text-foreground p-0.5 transition-colors"
                         >
                             {allEnabled || noneEnabled ? (
-                                <CheckCheckIcon className="h-3.5 w-3.5" />
+                                <CheckCheckIcon className="size-3.5" />
                             ) : (
-                                <XCircleIcon className="h-3.5 w-3.5" />
+                                <XCircleIcon className="size-3.5" />
                             )}
                         </button>
                     </TooltipTrigger>

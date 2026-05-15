@@ -1,5 +1,7 @@
-import { lazy, Suspense, useState, useEffect } from 'react';
-import type { EditorProps, Monaco } from '@monaco-editor/react';
+import { lazy, Suspense, type CSSProperties } from 'react';
+
+type EditorProps = import('@monaco-editor/react').EditorProps;
+type Monaco = import('@monaco-editor/react').Monaco;
 
 // Lazy load Monaco Editor to reduce initial bundle size
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
@@ -10,6 +12,16 @@ interface LazyMonacoEditorProps extends EditorProps {
 
 // Theme configuration
 const TXADMIN_DARK_THEME = 'txadmin-dark';
+const editorFallbackStyle: CSSProperties = {
+    height: '400px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1e1e1e',
+    color: '#d4d4d4',
+    fontFamily: 'monospace',
+    fontSize: '14px',
+};
 
 /**
  * Configures Monaco Editor theme
@@ -29,8 +41,6 @@ const configureMonacoTheme = (monaco: Monaco) => {
  * Reduces initial bundle size by ~3MB
  */
 export function LazyMonacoEditor(props: LazyMonacoEditorProps) {
-    const [isLoading, setIsLoading] = useState(true);
-
     const handleBeforeMount = (monaco: Monaco) => {
         configureMonacoTheme(monaco);
         // Call original beforeMount if provided
@@ -42,17 +52,11 @@ export function LazyMonacoEditor(props: LazyMonacoEditorProps) {
             fallback={
                 <div
                     style={{
-                        height: props.height || '400px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: '#1e1e1e',
-                        color: '#d4d4d4',
-                        fontFamily: 'monospace',
-                        fontSize: '14px',
+                        ...editorFallbackStyle,
+                        height: props.height || editorFallbackStyle.height,
                     }}
                 >
-                    Loading editor...
+                    Loading editor…
                 </div>
             }
         >
@@ -60,5 +64,3 @@ export function LazyMonacoEditor(props: LazyMonacoEditorProps) {
         </Suspense>
     );
 }
-
-export default LazyMonacoEditor;

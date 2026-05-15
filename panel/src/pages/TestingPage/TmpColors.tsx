@@ -9,7 +9,7 @@ export default function TmpColors() {
             <div className="mx-4 space-y-8">
                 {/* Header */}
                 <div className="text-center">
-                    <h2 className="mb-2 text-2xl font-bold">Color System Overview</h2>
+                    <h2 className="mb-2 text-2xl font-semibold">Color System Overview</h2>
                     <p className="text-muted-foreground text-sm">
                         Semantic colors, hint backgrounds, and inline text variants
                     </p>
@@ -230,7 +230,7 @@ export default function TmpColors() {
                                     disabled
                                 </Button>
                                 <Button size="sm">
-                                    <PersonStandingIcon className="mr-1 h-4 w-4" />
+                                    <PersonStandingIcon className="mr-1 size-4" />
                                     with icon
                                 </Button>
                                 <Button size="icon" variant="outline">

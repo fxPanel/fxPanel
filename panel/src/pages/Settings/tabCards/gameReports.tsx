@@ -8,6 +8,7 @@ import {
     getPageConfig,
     configsReducer,
     getConfigDiff,
+    reconcileCardPendingSave,
 } from '../utils';
 import SettingsCardShell from '../SettingsCardShell';
 import { Input } from '@/components/ui/input';
@@ -17,7 +18,12 @@ export const pageConfigs = {
     reportsEnabled: getPageConfig('gameFeatures', 'reportsEnabled', undefined, true),
     ticketPriorityEnabled: getPageConfig('gameFeatures', 'ticketPriorityEnabled', undefined, false),
     ticketFeedbackEnabled: getPageConfig('gameFeatures', 'ticketFeedbackEnabled', undefined, true),
-    ticketCategories: getPageConfig('gameFeatures', 'ticketCategories', undefined, ['Player Report', 'Bug Report', 'Question', 'Other'] as string[]),
+    ticketCategories: getPageConfig('gameFeatures', 'ticketCategories', undefined, [
+        'Player Report',
+        'Bug Report',
+        'Question',
+        'Other',
+    ] as string[]),
     ticketRetentionDays: getPageConfig('gameFeatures', 'ticketRetentionDays', undefined, 30),
     ticketChannelId: getPageConfig('discordBot', 'ticketChannelId', undefined, null as string | null),
 } as const;
@@ -49,10 +55,13 @@ export default function ConfigCardGameReports({ cardCtx, pageCtx }: SettingsCard
 
     const updatePageState = useCallback(() => {
         const rawCategories = categoriesRef.current?.value ?? '';
-        const categories = rawCategories
-            .split(/[,;]\s*/)
-            .map((s) => s.trim())
-            .filter((s) => s.length > 0);
+        const categories = rawCategories.split(/[,;]\s*/).reduce<string[]>((values, value) => {
+            const trimmedValue = value.trim();
+            if (trimmedValue.length > 0) {
+                values.push(trimmedValue);
+            }
+            return values;
+        }, []);
         const retDays = parseInt(retentionDaysRef.current?.value ?? '30', 10);
         const chanId = ticketChannelRef.current?.value.trim() || null;
 
@@ -63,7 +72,7 @@ export default function ConfigCardGameReports({ cardCtx, pageCtx }: SettingsCard
         } as any;
 
         const res = getConfigDiff(cfg, states, overwrites as any, false);
-        pageCtx.setCardPendingSave(res.hasChanges ? cardCtx : null);
+        pageCtx.setCardPendingSave(reconcileCardPendingSave(cardCtx, res.hasChanges));
         return res;
     }, [cfg, states, pageCtx, cardCtx]);
 
@@ -108,8 +117,8 @@ export default function ConfigCardGameReports({ cardCtx, pageCtx }: SettingsCard
                     disabled={pageCtx.isReadOnly}
                 />
                 <SettingItemDesc>
-                    When enabled, players can use the <strong>/ticket</strong> command to submit support
-                    tickets that admins can review in the Tickets page.
+                    When enabled, players can use the <strong>/ticket</strong> command to submit support tickets that
+                    admins can review in the Tickets page.
                 </SettingItemDesc>
             </SettingItem>
 
@@ -121,9 +130,7 @@ export default function ConfigCardGameReports({ cardCtx, pageCtx }: SettingsCard
                     onChange={debouncedUpdatePageState}
                     disabled={pageCtx.isReadOnly}
                 />
-                <SettingItemDesc>
-                    Comma-separated list of ticket categories players can choose from.
-                </SettingItemDesc>
+                <SettingItemDesc>Comma-separated list of ticket categories players can choose from.</SettingItemDesc>
             </SettingItem>
 
             <SettingItem label="Priority Selection">
@@ -137,8 +144,7 @@ export default function ConfigCardGameReports({ cardCtx, pageCtx }: SettingsCard
                     disabled={pageCtx.isReadOnly}
                 />
                 <SettingItemDesc>
-                    Allow players to set a priority level (Low, Medium, High, Critical) when submitting a
-                    ticket.
+                    Allow players to set a priority level (Low, Medium, High, Critical) when submitting a ticket.
                 </SettingItemDesc>
             </SettingItem>
 
@@ -170,8 +176,8 @@ export default function ConfigCardGameReports({ cardCtx, pageCtx }: SettingsCard
                     className="w-24"
                 />
                 <SettingItemDesc>
-                    How many days to keep resolved/closed tickets before they are automatically deleted.
-                    Default is 30 days.
+                    How many days to keep resolved/closed tickets before they are automatically deleted. Default is 30
+                    days.
                 </SettingItemDesc>
             </SettingItem>
 
@@ -184,8 +190,8 @@ export default function ConfigCardGameReports({ cardCtx, pageCtx }: SettingsCard
                     disabled={pageCtx.isReadOnly}
                 />
                 <SettingItemDesc>
-                    When set, new tickets will create a Discord thread in this channel (requires Discord
-                    integration to be enabled).
+                    When set, new tickets will create a Discord thread in this channel (requires Discord integration to
+                    be enabled).
                 </SettingItemDesc>
             </SettingItem>
         </SettingsCardShell>

@@ -37,6 +37,15 @@ function PlayerGrowthChart({ data }: Props) {
             data: data.map((d) => ({ x: d.day, y: d.cumulative })),
         },
     ];
+    const tickValues =
+        data.length > 30
+            ? data.reduce<string[]>((values, point, index) => {
+                  if (index % Math.ceil(data.length / 15) === 0) {
+                      values.push(point.day);
+                  }
+                  return values;
+              }, [])
+            : undefined;
 
     return (
         <div style={{ height: 260 }}>
@@ -57,10 +66,7 @@ function PlayerGrowthChart({ data }: Props) {
                     tickSize: 5,
                     tickPadding: 5,
                     tickRotation: -45,
-                    tickValues:
-                        data.length > 30
-                            ? data.filter((_, i) => i % Math.ceil(data.length / 15) === 0).map((d) => d.day)
-                            : undefined,
+                    tickValues,
                 }}
                 axisLeft={{
                     tickSize: 5,

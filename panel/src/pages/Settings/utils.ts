@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, type Dispatch, type SetStateAction } from 'react';
 import { dequal } from 'dequal/lite';
 import { GetConfigsResp, PartialTxConfigs } from '@shared/otherTypes';
 
@@ -24,13 +24,28 @@ export type SettingsPageContext = {
     isSaving: boolean;
     swrError: string | undefined;
     cardPendingSave: SettingsCardContext | null;
-    setCardPendingSave: (state: SettingsCardContext | null) => void;
+    setCardPendingSave: Dispatch<SetStateAction<SettingsCardContext | null>>;
     saveChanges: (card: SettingsCardContext, changes: PartialTxConfigs) => Promise<void>;
 };
 
 export type SettingsCardProps = {
     cardCtx: SettingsCardContext;
     pageCtx: SettingsPageContext;
+};
+
+/**
+ * Tabs like Game mount several settings cards at once; each runs a diff effect on every render.
+ * Never clear global pending-save unless it belonged to this card, so siblings do not wipe each other.
+ */
+export const reconcileCardPendingSave = (
+    cardCtx: SettingsCardContext,
+    hasChanges: boolean,
+): SetStateAction<SettingsCardContext | null> => {
+    return (prev) => {
+        if (hasChanges) return cardCtx;
+        if (prev?.cardId === cardCtx.cardId) return null;
+        return prev;
+    };
 };
 
 type PageConfig = {
@@ -55,14 +70,7 @@ export const SYM_RESET_CONFIG = Symbol('Settings:ResetConfig');
 /**
  * Helper to get the inferred type of a config object.
  */
-export const getPageConfig = <
-    T = any,
->(
-    scope: string,
-    key: string,
-    showAdvancedState?: boolean,
-    bakedDefault?: T,
-) => {
+export const getPageConfig = <T = any>(scope: string, key: string, showAdvancedState?: boolean, bakedDefault?: T) => {
     return {
         scope,
         key,
@@ -83,11 +91,13 @@ export const getPageConfig = <
 export const configsReducer = <T extends PageConfigs>(state: any, action: PageConfigReducerAction<any>) => {
     const typedState = state as Record<string, any>;
     const newValue =
-        typeof action.configValue === 'function' ? action.configValue(typedState[action.configName]) : action.configValue;
+        typeof action.configValue === 'function'
+            ? action.configValue(typedState[action.configName])
+            : action.configValue;
     return { ...typedState, [action.configName]: newValue } as any;
 };
 
-export type PageConfigReducerActionValue<T = any> = (T | undefined) | ((prevValue: T | undefined) => T | undefined);
+type PageConfigReducerActionValue<T = any> = (T | undefined) | ((prevValue: T | undefined) => T | undefined);
 export type PageConfigReducerAction<T = any> = {
     configName: string;
     configValue: PageConfigReducerActionValue<T>;

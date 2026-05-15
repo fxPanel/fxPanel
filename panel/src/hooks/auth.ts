@@ -2,7 +2,7 @@ import { ApiLogoutResp, ReactAuthDataType } from '@shared/authApiTypes';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomEffect } from 'jotai-effect';
 import { accountModalOpenAtom, confirmDialogOpenAtom, promptDialogOpenAtom } from './dialogs';
-import { isGlobalMenuSheetOpenAtom, isPlayerlistSheetOpenAtom, isServerSheetOpenAtom } from './sheets';
+import { isGlobalMenuSheetOpenAtom, isPlayerlistSheetOpenAtom } from './sheets';
 import { playerModalOpenAtom } from './playerModal';
 import { globalStatusAtom } from './status';
 import { txToast } from '@/components/TxToaster';
@@ -19,6 +19,7 @@ import { LogoutReasonHash } from '@/pages/auth/Login';
 import { mutate } from 'swr';
 import { fetchWithTimeout } from './fetch';
 import { offlineWarningAtom } from './useWarningBar';
+import { useCallback } from 'react';
 
 /**
  * Atoms
@@ -90,11 +91,11 @@ export const useAdminPerms = () => {
 //Since this is triggered by a logout notice, we don't need to bother doing a POST /auth/logout
 export const useExpireAuthData = () => {
     const setAuthData = useSetAtom(authDataAtom);
-    return (src = 'unknown', reason = 'unknown', reasonHash = LogoutReasonHash.EXPIRED) => {
+    return useCallback((src = 'unknown', reason = 'unknown', reasonHash = LogoutReasonHash.EXPIRED) => {
         console.log('[useExpireAuthData] Logout notice received:', { src, reason, reasonHash });
         setAuthData(false);
         redirectToLogin(reasonHash);
-    };
+    }, [setAuthData]);
 };
 
 //Generic authentication hook, using it will cause your component to re-render on _any_ auth changes
@@ -133,7 +134,6 @@ export const logoutWatcher = atomEffect((get, set) => {
     set(confirmDialogOpenAtom, false);
     set(promptDialogOpenAtom, false);
     set(isGlobalMenuSheetOpenAtom, false);
-    set(isServerSheetOpenAtom, false);
     set(isPlayerlistSheetOpenAtom, false);
     set(playerModalOpenAtom, false);
     set(actionModalOpenAtom, false);

@@ -64,7 +64,7 @@ export async function LiveSpectateStart(ctx: AuthedCtx) {
         sessionId,
     });
 
-    ctx.admin.logAction(`Started live spectate of "${player.displayName}" from web panel.`);
+    ctx.admin.logAction(`Started live spectate of "${player.displayName}" from web panel.`, 'player.live_spectate.start');
     console.verbose.log(
         `Admin "${ctx.admin.name}" started live spectate, player #${player.netid}, session ${sessionId}`,
     );
@@ -90,6 +90,10 @@ export async function LiveSpectateStop(ctx: AuthedCtx) {
     const session = activeSessions.get(sessionId);
     if (!session) {
         return sendResp({ error: 'Session not found or already stopped.' });
+    }
+
+    if (session.adminName !== ctx.admin.name) {
+        return sendResp({ error: 'You can only stop your own live spectate session.' });
     }
 
     cleanupSession(sessionId);

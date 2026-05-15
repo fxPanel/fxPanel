@@ -41,8 +41,10 @@ export default function AddLegacyBanPage() {
         const identifiers = rawIds
             .toLowerCase()
             .split(/[,;\s\n]+/g)
-            .map((id) => id.trim())
-            .filter(Boolean);
+            .flatMap((id) => {
+                const trimmedId = id.trim();
+                return trimmedId ? [trimmedId] : [];
+            });
         if (!identifiers.length) {
             txToast.warning(`You must enter at least one valid identifier.`);
             idsTextareaRef.current.focus();
@@ -52,7 +54,7 @@ export default function AddLegacyBanPage() {
         setIsSaving(true);
         legacyBanApi({
             data: { identifiers, reason, duration },
-            toastLoadingMessage: 'Banning identifiers...',
+            toastLoadingMessage: 'Banning identifiers…',
             genericHandler: {
                 successMsg: 'Identifiers banned.',
             },
@@ -94,7 +96,7 @@ export default function AddLegacyBanPage() {
                         ref={idsTextareaRef}
                         className="h-full"
                         disabled={isSaving || !canBan}
-                        placeholder="discord:xxxx, fivem:xxxx, license:xxxx, steam:xxxx, etc..."
+                        placeholder="discord:xxxx, fivem:xxxx, license:xxxx, steam:xxxx, etc…"
                     />
                 </div>
                 <BanForm ref={banFormRef} disabled={isSaving || !canBan} />
@@ -113,7 +115,7 @@ export default function AddLegacyBanPage() {
                 <Button size="sm" variant="destructive" disabled={isSaving || !canBan} onClick={handleSave}>
                     {isSaving ? (
                         <span className="flex items-center leading-relaxed">
-                            <Loader2Icon className="inline h-4 animate-spin" /> Banning...
+                            <Loader2Icon className="inline h-4 animate-spin" /> Banning…
                         </span>
                     ) : (
                         'Apply Ban'

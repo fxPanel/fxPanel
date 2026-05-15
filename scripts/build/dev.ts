@@ -3,7 +3,7 @@ import path from 'node:path';
 import chokidar from 'chokidar';
 import { debounce } from 'lodash-es';
 import esbuild, { BuildOptions } from 'esbuild';
-import { copyStaticFiles, getFxsPaths, getPublishVersion } from './utils';
+import { copyBotRuntimeDependencies, copyStaticFiles, getFxsPaths, getPublishVersion } from './utils';
 import config from './config';
 import { parseTxDevEnv } from '../../shared/txDevEnv';
 import { TxAdminRunner } from './TxAdminRunner';
@@ -16,15 +16,29 @@ process.stdout.write('.\n'.repeat(40) + '\x1B[2J\x1B[H');
 const txDevEnv = parseTxDevEnv();
 if (!txDevEnv.FXSERVER_PATH || !txDevEnv.VITE_URL) {
     console.error(`Missing 'TXDEV_FXSERVER_PATH' and/or 'TXDEV_VITE_URL' env variables.`);
-    console.error('Please read the docs/development.md file for more information.');
+    console.error(
+        'See docs/CONTRIBUTING.md, shared/txDevEnv.ts, and https://github.com/SomeAussieGaymer/fxPanel-Docs/tree/main for setup.',
+    );
     process.exit(1);
+}
+
+//Auto-enable NO_SPAWN on platforms where FXServer can't run natively (macOS).
+//Users on Windows/Linux can still opt-in explicitly via TXDEV_NO_SPAWN=1, e.g.
+//when targeting a remote / Dockerized FXServer.
+const noSpawn = txDevEnv.NO_SPAWN || process.platform === 'darwin';
+if (noSpawn) {
+    if (process.platform === 'darwin' && !txDevEnv.NO_SPAWN) {
+        console.log('[BUILDER] Detected macOS host - running in watch-only mode (no FXServer spawn).');
+    } else {
+        console.log('[BUILDER] TXDEV_NO_SPAWN set - running in watch-only mode (no FXServer spawn).');
+    }
 }
 
 //Setup
 const { txVersion, preReleaseExpiration } = getPublishVersion(true);
 let fxsPaths: ReturnType<typeof getFxsPaths>;
 try {
-    fxsPaths = getFxsPaths(txDevEnv.FXSERVER_PATH!);
+    fxsPaths = getFxsPaths(txDevEnv.FXSERVER_PATH!, noSpawn);
 } catch (error) {
     console.error('[BUILDER] Could not extract/validate the fxserver and monitor paths.');
     console.error(error);
@@ -35,8 +49,7 @@ console.log(`[BUILDER] Starting fxPanel Dev Builder for ${fxsPaths.root}`);
 //Sync target path and start chokidar
 //We don't really care about the path, just remove everything and copy again
 copyStaticFiles(fxsPaths.monitor, txVersion, 'init');
-//Copy addon-sdk into node_modules so ESM resolution finds it
-fs.cpSync('./addon-sdk', path.join(fxsPaths.monitor, 'node_modules/addon-sdk'), { recursive: true, force: true });
+copyBotRuntimeDependencies(fxsPaths.monitor);
 const debouncedCopier = debounce((eventName) => {
     try {
         copyStaticFiles(fxsPaths.monitor, txVersion, eventName);
@@ -74,11 +87,16 @@ const txInstance = new TxAdminRunner(fxsPaths.root, fxsPaths.bin, txDevEnv);
 process.stdin.on('data', (data) => {
     const cmd = data.toString().toLowerCase().trim();
     if (cmd === 'r' || cmd === 'rr') {
+        if (noSpawn) {
+            console.log('[BUILDER] Watch-only mode: restart your FXServer manually.');
+            return;
+        }
         txInstance.removeRebootPause();
         console.log(`[BUILDER] Restarting due to stdin request.`);
         txInstance.killServer();
         txInstance.spawnServer();
     } else if (cmd === 'p' || cmd === 'pause') {
+        if (noSpawn) return;
         txInstance.toggleRebootPause();
     } else if (cmd === 'cls' || cmd === 'clear') {
         console.clear();
@@ -106,14 +124,14 @@ const plugins: BuildOptions['plugins'] = [
         setup(build) {
             build.onStart(() => {
                 console.log(`[BUILDER] Build started.`);
-                txInstance.killServer();
+                if (!noSpawn) txInstance.killServer();
             });
             build.onEnd(({ errors }) => {
                 if (errors.length) {
                     console.log(`[BUILDER] Failed with errors.`);
                 } else {
                     console.log('[BUILDER] Finished build.');
-                    txInstance.spawnServer();
+                    if (!noSpawn) txInstance.spawnServer();
                 }
             });
         },

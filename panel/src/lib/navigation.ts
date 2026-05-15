@@ -1,26 +1,20 @@
 import { LogoutReasonHash } from '@/pages/auth/Login';
 
-/**
- * Validates if a redirect path is valid or not.
- * To prevent open redirect, we need to make sure the first char is / and the second is not,
- * otherwise //example.com would be a valid redirect to <proto>://example.com
- */
-export function isValidRedirectPath(location: unknown): location is string {
-    if (typeof location !== 'string' || !location) return false;
-    const url = new URL(location, window.location.href);
-    return location.startsWith('/') && !location.startsWith('//') && url.hostname === window.location.hostname;
-}
+export { isValidRedirectPath } from './redirectValidation';
 
 /**
  * Returns the path/search/hash of the login URL with redirect params
  * /aaa/bbb?ccc=ddd#eee -> /login?r=%2Faaa%2Fbbb%3Fccc%3Dddd%23eee
  */
-export function redirectToLogin(reasonHash = LogoutReasonHash.NONE) {
+export function buildLoginRedirectPath(reasonHash = LogoutReasonHash.NONE) {
     const currLocation = window.location.pathname + window.location.search + window.location.hash;
-    const newLocation =
-        currLocation === '/' || currLocation.startsWith('/login')
-            ? `/login${reasonHash}`
-            : `/login?r=${encodeURIComponent(currLocation)}${reasonHash}`;
+    return currLocation === '/' || currLocation.startsWith('/login')
+        ? `/login${reasonHash}`
+        : `/login?r=${encodeURIComponent(currLocation)}${reasonHash}`;
+}
+
+export function redirectToLogin(reasonHash = LogoutReasonHash.NONE) {
+    const newLocation = buildLoginRedirectPath(reasonHash);
     window.history.replaceState(null, '', newLocation);
 }
 

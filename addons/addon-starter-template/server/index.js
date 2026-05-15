@@ -15,13 +15,7 @@ import { createAddon } from 'addon-sdk';
 
 const addon = createAddon();
 
-// ────────────────────────────────────────
-// Routes (authenticated — admin panel)
-// ────────────────────────────────────────
-
-// GET /addons/addon-starter-template/api/greeting
-addon.registerRoute('GET', '/greeting', async (req) => {
-    const name = req.admin.name;
+const buildGreetingResponse = async (name) => {
     const visits = (await addon.storage.getOr('visits', 0)) + 1;
     await addon.storage.set('visits', visits);
 
@@ -31,6 +25,25 @@ addon.registerRoute('GET', '/greeting', async (req) => {
             message: `Hello, ${name}! This addon has been queried ${visits} time(s).`,
         },
     };
+};
+
+// ────────────────────────────────────────
+// Routes (authenticated — admin panel)
+// ────────────────────────────────────────
+
+// GET /addons/addon-starter-template/api/greeting
+// This route is also used by the `starter-greeting` Discord slash command example.
+// The command calls it through `bridge.request('addonRoute', ...)`, which lets the
+// addon keep its real logic on the server side instead of duplicating it in Discord code.
+addon.registerRoute('GET', '/greeting', async (req) => {
+    return await buildGreetingResponse(req.admin.name);
+});
+
+addon.registerRoute('POST', '/greeting', async (req) => {
+    const requestedName = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 32) : '';
+    const name = requestedName || req.admin.name;
+
+    return await buildGreetingResponse(name);
 });
 
 // POST /addons/addon-starter-template/api/notes

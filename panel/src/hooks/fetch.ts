@@ -1,12 +1,23 @@
 import { txToast, validToastTypes } from '@/components/TxToaster';
 import { useCsrfToken, useExpireAuthData } from '@/hooks/auth';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 const WEBPIPE_PATH = 'https://monitor/WebPipe';
 const headeruserAgent = `txAdminPanel/v${window.txConsts.txaVersion} (atop FXServer/b${window.txConsts.fxsVersion})`;
 const defaultHeaders = {
     'Content-Type': 'application/json; charset=UTF-8',
     Accept: 'application/json',
+};
+
+const replacePathParam = (path: string, key: string, value: string | number) => {
+    const segment = `/:${key}`;
+    const segmentIndex = path.indexOf(segment);
+    if (segmentIndex === -1) return path;
+
+    const suffix = path.slice(segmentIndex + segment.length);
+    if (suffix.length > 0 && !suffix.startsWith('/')) return path;
+
+    return `${path.slice(0, segmentIndex)}/${value}${suffix}`;
 };
 
 export enum ApiTimeout {
@@ -39,34 +50,37 @@ export const useAuthedFetcher = () => {
     const csrfToken = useCsrfToken();
     const expireSess = useExpireAuthData();
 
-    return async <Resp = any>(fetchUrl: string, fetchOpts: FetcherOpts = {}, abortController?: AbortController) => {
-        if (!csrfToken) throw new Error('CSRF token not set');
-        //Enforce single slash at the start of the path to prevent CSRF token leak
-        if (fetchUrl[0] !== '/' || fetchUrl[1] === '/') {
-            throw new Error(`[useAuthedFetcher] fetchUrl MUST start with a single '/', got '${fetchUrl}'.`);
-        }
-        if (!window.txConsts.isWebInterface) {
-            fetchUrl = WEBPIPE_PATH + fetchUrl;
-        }
+    return useCallback(
+        async <Resp = any>(fetchUrl: string, fetchOpts: FetcherOpts = {}, abortController?: AbortController) => {
+            if (!csrfToken) throw new Error('CSRF token not set');
+            //Enforce single slash at the start of the path to prevent CSRF token leak
+            if (fetchUrl[0] !== '/' || fetchUrl[1] === '/') {
+                throw new Error(`[useAuthedFetcher] fetchUrl MUST start with a single '/', got '${fetchUrl}'.`);
+            }
+            if (!window.txConsts.isWebInterface) {
+                fetchUrl = WEBPIPE_PATH + fetchUrl;
+            }
 
-        fetchOpts.method ??= 'GET';
-        const resp = await fetch(fetchUrl, {
-            method: fetchOpts.method,
-            headers: {
-                ...defaultHeaders,
-                'User-Agent': headeruserAgent,
-                'X-TxAdmin-CsrfToken': csrfToken,
-            },
-            body: fetchOpts.body ? JSON.stringify(fetchOpts.body) : undefined,
-            signal: abortController?.signal,
-        });
-        const data = await resp.json();
-        if (data?.logout) {
-            expireSess('useAuthedFetcher', data?.reason ?? 'unknown');
-            throw new Error('Session expired');
-        }
-        return data as Resp;
-    };
+            fetchOpts.method ??= 'GET';
+            const resp = await fetch(fetchUrl, {
+                method: fetchOpts.method,
+                headers: {
+                    ...defaultHeaders,
+                    'User-Agent': headeruserAgent,
+                    'X-TxAdmin-CsrfToken': csrfToken,
+                },
+                body: fetchOpts.body ? JSON.stringify(fetchOpts.body) : undefined,
+                signal: abortController?.signal,
+            });
+            const data = await resp.json();
+            if (data?.logout) {
+                expireSess('useAuthedFetcher', data?.reason ?? 'unknown');
+                throw new Error('Session expired');
+            }
+            return data as Resp;
+        },
+        [csrfToken, expireSess],
+    );
 };
 
 /**
@@ -145,8 +159,7 @@ export const useBackendApi = <RespType = any, ReqType = NonNullable<Object>>(hoo
         let fetchUrl = hookOpts.path;
         if (opts.pathParams) {
             for (const [key, val] of Object.entries(opts.pathParams)) {
-                const pattern = new RegExp(`/:${key}(/|$)`);
-                const replaced = fetchUrl.replace(pattern, `/${val}$1`);
+                const replaced = replacePathParam(fetchUrl, key, val);
                 if (replaced === fetchUrl) {
                     throw new Error(`[useBackendApi] pathParam '${key}' not found in path '${hookOpts.path}'`);
                 }
@@ -242,7 +255,7 @@ export const useBackendApi = <RespType = any, ReqType = NonNullable<Object>>(hoo
                 validToastTypes.includes(data?.type) &&
                 typeof txToast[data.type as keyof typeof txToast] === 'function'
             ) {
-                txToast[data.type as keyof typeof txToast](data, { id: currentToastId.current });
+                txToast(data, { id: currentToastId.current });
             }
 
             //Custom success handler

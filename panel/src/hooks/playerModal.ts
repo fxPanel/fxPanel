@@ -14,7 +14,7 @@ export type PlayerModalRefType =
           license: string;
       };
 export const playerModalOpenAtom = atomWithReset(false);
-export const playerModalRefAtom = atomWithReset<PlayerModalRefType | undefined>(undefined);
+const playerModalRefAtom = atomWithReset<PlayerModalRefType | undefined>(undefined);
 export const playerModalUrlParam = 'playerModal';
 
 //Helper to set the URL search param

@@ -1,4 +1,3 @@
-import { useSetPageTitle } from '@/hooks/pages';
 import TmpAuthState from './TmpAuthState';
 import TmpColors from './TmpColors';
 import TmpMarkdown from './TmpMarkdown';
@@ -9,14 +8,10 @@ import TmpApi from './TmpApi';
 import TmpFiller from './TmpFiller';
 import TmpDndSortable from './TmpDndSortable';
 import TmpSwr from './TmpSwr';
-import { useEffect } from 'react';
 import TmpJsonEditor from './TmpJsonEditor';
 import TmpPageHeader from './TmpPageHeader';
 
 export default function TestingPage() {
-    const setPageTitle = useSetPageTitle();
-    setPageTitle();
-
     // useEffect(() => {
     //     return () => console.clear();
     // }, []);

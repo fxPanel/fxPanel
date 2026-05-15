@@ -8,9 +8,13 @@ Thanks for your interest in contributing! This guide covers everything you need 
 
 ### Prerequisites
 
-- **Windows** (the builder doesn't support other OSs)
+- **Operating system**
+    - **Windows, macOS, or Linux** — install dependencies, run tests, and run **`npm run build`** on any of these (CI does the same).
+    - **FXServer-spawning dev mode** — `cd core && npm run dev` **starting and restarting FXServer** for you when the core bundle rebuilds — is **Windows and Linux only** (see `scripts/build/dev.ts` and `TxAdminRunner`).
+    - **macOS** — the same `npm run dev` command runs in **watch-only** mode: it rebuilds and syncs into your **`monitor`** folder but **does not spawn FXServer**. Start FXServer yourself (or use a remote server) and use stdin `r` only to get a reminder to restart manually.
+    - **Optional `TXDEV_NO_SPAWN`** — on Windows or Linux, set `TXDEV_NO_SPAWN=1` in `.env` for the same watch-only behavior (e.g. FXServer in Docker or on another machine).
 - **Node.js** v22.9 or newer
-- **FXServer** installation
+- **FXServer artifacts path** — a folder that contains the **`monitor`** resource (your server install or artifact tree). Required for `TXDEV_FXSERVER_PATH` even in watch-only mode so the dev builder knows where to copy outputs.
 
 ### Setup
 
@@ -28,11 +32,14 @@ npm install
 npm run prepare
 ```
 
-3. Create a `.env` file in the project root with your FXServer path:
+3. Create a `.env` file in the project root (paths are examples — use your install):
 
 ```sh
 TXDEV_FXSERVER_PATH='E:/FiveM/10309/'
+TXDEV_VITE_URL='http://localhost:40122'
 ```
+
+`TXDEV_FXSERVER_PATH` is **required** for the core dev builder. `TXDEV_VITE_URL` defaults to `http://localhost:40122` if unset (`shared/txDevEnv.ts`); set it explicitly if your panel dev server uses another origin (see `scripts/build/dev.ts`).
 
 ### Development Workflows
 
@@ -43,10 +50,14 @@ TXDEV_FXSERVER_PATH='E:/FiveM/10309/'
 cd panel
 npm run dev
 
-# Terminal 2: Start the core builder (watches files, restarts FXServer)
+# Terminal 2: Start the core dev builder (esbuild watch + sync into monitor/)
 cd core
 npm run dev
 ```
+
+On **Windows or Linux** (and without `TXDEV_NO_SPAWN`), Terminal 2 **stops and starts FXServer** around each successful core rebuild so the server picks up changes.
+
+On **macOS**, or whenever **`TXDEV_NO_SPAWN`** is set, Terminal 2 **only** rebuilds and copies files — **restart FXServer yourself** after changes (the builder logs watch-only mode on startup).
 
 **NUI Menu**:
 
@@ -60,14 +71,14 @@ npm run dev
 npm run browser
 ```
 
-See [development.md](development.md) for the full development guide.
+For more detail on env vars and builder behavior, read `scripts/build/dev.ts` and `shared/txDevEnv.ts`. Long-form guides (same sources as the website) live in the **[fxPanel-Docs](https://github.com/SomeAussieGaymer/fxPanel-Docs/tree/main)** repo — pick the folder for your version (e.g. `v0.3.0-Beta/`). The rendered site is [fxpanel.org/docs](https://fxpanel.org/docs).
 
 ## Coding Style
 
 ### TypeScript / JavaScript
 
 - **Formatter**: Prettier — 4-space indent, single quotes, 120-char width, trailing commas
-- **Linter**: ESLint 9 flat config with `@typescript-eslint/recommended`
+- **Linter**: ESLint flat config with `@typescript-eslint/recommended` (see `core/eslint.config.js` and `panel/eslint.config.js`)
 - Prefer **arrow functions** except for React components
 - Prefer **implicit return types** over explicit annotations
 - Prefer **`for...of`** over `.forEach()`
@@ -159,12 +170,12 @@ npm run typecheck -w core
 - API route handlers (integration tests welcome)
 - Bug fixes should include a regression test
 
-## `!NC` Tags
+## No-commit (`!` + `NC`) tags
 
-The `!NC` comment tag marks code that **must not be committed**. The pre-commit hook scans for these and blocks the commit if any are found. Use them for temporary debugging code or TODOs that must be resolved before merging.
+The end-of-line comment `!` immediately followed by `NC` marks code that **must not be committed**. The pre-commit hook scans for that two-character sequence and blocks the commit if any are found. Use them for temporary debugging code or TODOs that must be resolved before merging.
 
 ```ts
-console.log('debug output'); // !NC
+console.log('debug output'); // append ! then NC (no space) to block commits while iterating
 ```
 
 ## Pull Request Process

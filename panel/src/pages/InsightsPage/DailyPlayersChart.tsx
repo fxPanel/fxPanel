@@ -34,6 +34,15 @@ function DailyPlayersChart({ daily }: Props) {
         newPlayers: d.newPlayers,
         returningPlayers: d.returningPlayers,
     }));
+    const tickValues =
+        data.length > 14
+            ? data.reduce<string[]>((values, entry, index) => {
+                  if (index % Math.ceil(data.length / 10) === 0) {
+                      values.push(entry.day as string);
+                  }
+                  return values;
+              }, [])
+            : undefined;
 
     const colors = isDarkMode ? ['#38bdf8', '#2dd4bf'] : ['#0284c7', '#0f766e'];
 
@@ -54,10 +63,7 @@ function DailyPlayersChart({ daily }: Props) {
                     tickSize: 5,
                     tickPadding: 5,
                     tickRotation: -45,
-                    tickValues:
-                        data.length > 14
-                            ? data.filter((_, i) => i % Math.ceil(data.length / 10) === 0).map((d) => d.day as string)
-                            : undefined,
+                    tickValues,
                 }}
                 axisLeft={{
                     tickSize: 5,

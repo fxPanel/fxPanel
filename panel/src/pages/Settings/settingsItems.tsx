@@ -15,13 +15,6 @@ function LabelOptional() {
         </span>
     );
 }
-function LabelNew() {
-    return (
-        <span className="bg-accent text-accent-foreground text-2xs mt-0.5 w-fit rounded-sm px-0.5 pb-0.5 leading-snug font-semibold tracking-wider">
-            NEW
-        </span>
-    );
-}
 
 /**
  * A description for a setting item.
@@ -43,17 +36,15 @@ export function SettingItem({
     htmlFor,
     required: isRequired,
     showOptional,
-    showNew,
     showIf,
     children,
 }: SettingItemProps) {
     if (showIf !== undefined && !showIf) return null;
     return (
-        <div className="group/cfgCardItem max-w-4xl space-y-2 sm:grid sm:grid-cols-8 sm:items-start sm:gap-4 sm:space-y-0">
+        <div className="group/cfgCardItem flex max-w-4xl flex-col gap-y-2 sm:grid sm:grid-cols-8 sm:items-start sm:gap-4 sm:gap-y-0">
             <div className="sm:col-span-2">
                 <Label className="flex flex-col text-sm leading-6 font-medium" htmlFor={htmlFor}>
                     {label}
-                    {showNew && <LabelNew />}
                     {isRequired && <LabelRequired />}
                     {showOptional && <LabelOptional />}
                 </Label>
@@ -68,7 +59,6 @@ type SettingItemProps = {
     htmlFor?: string;
     required?: boolean;
     showOptional?: boolean;
-    showNew?: boolean;
     showIf?: boolean;
     children: React.ReactNode;
 };

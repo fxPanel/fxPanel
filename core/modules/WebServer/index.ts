@@ -11,7 +11,7 @@ import { Server as SocketIO } from 'socket.io';
 import WebSocket from './webSocket';
 
 import { customAlphabet } from 'nanoid';
-import dict49 from 'nanoid-dictionary/nolookalikes';
+import { nolookalikes } from 'nanoid-dictionary';
 
 import { txDevEnv, txEnv, txHostConfig } from '@core/globalData';
 import router from './router';
@@ -29,7 +29,7 @@ import { isProxy } from 'node:util/types';
 import serveStaticMw from './middlewares/serveStaticMw';
 import serveRuntimeMw from './middlewares/serveRuntimeMw';
 const console = consoleFactory(modulename);
-const nanoid = customAlphabet(dict49, 32);
+const nanoid = customAlphabet(nolookalikes, 32);
 
 /**
  * Module for the web server and socket.io.
@@ -39,6 +39,7 @@ export default class WebServer {
     public isListening = false;
     public isServing = false;
     private sessionCookieName: string;
+    private legacySessionCookieName: string;
     public luaComToken: string;
     //setupKoa
     private app: Koa;
@@ -53,7 +54,8 @@ export default class WebServer {
     constructor() {
         //Generate cookie key & luaComToken
         const pathHash = crypto.createHash('shake256', { outputLength: 6 }).update(txEnv.profilePath).digest('hex');
-        this.sessionCookieName = `tx:${pathHash}`;
+        this.sessionCookieName = `fxp:${pathHash}`;
+        this.legacySessionCookieName = `tx:${pathHash}`;
         this.luaComToken = nanoid();
 
         // ===================
@@ -66,9 +68,15 @@ export default class WebServer {
         // would need to brute-force the full 256-bit key.
         this.app.keys = [crypto.randomBytes(32).toString('base64url')];
 
-        // Some people might want to enable it, but we are not guaranteeing XFF security
-        // due to the many possible ways you can connect to koa.
-        // this.app.proxy = true;
+        // Koa `ctx.ip` / secure / host: opt-in via `txConfig.webServer.trustProxy`.
+        // When enabled, terminate TLS and sanitize X-Forwarded-* only at a trusted edge.
+        if (txConfig.webServer.trustProxy) {
+            this.app.proxy = true;
+            const hops = txConfig.webServer.proxyTrustedHops;
+            if (typeof hops === 'number' && hops > 0) {
+                this.app.maxIpsCount = hops;
+            }
+        }
 
         //Setting up app
         //@ts-ignore: no clue what this error is, but i'd bet it's just bad koa types
@@ -91,13 +99,15 @@ export default class WebServer {
         //exposed cross-origin (credentials=false).
         if (txDevEnv.ENABLED) {
             const devOriginAllowlist = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
-            this.app.use(KoaCors({
-                origin: (ctx) => {
-                    const requestOrigin = ctx.get('Origin');
-                    return devOriginAllowlist.test(requestOrigin) ? requestOrigin : '';
-                },
-                credentials: false,
-            }));
+            this.app.use(
+                KoaCors({
+                    origin: (ctx) => {
+                        const requestOrigin = ctx.get('Origin');
+                        return devOriginAllowlist.test(requestOrigin) ? requestOrigin : '';
+                    },
+                    credentials: false,
+                }),
+            );
         }
 
         //Setting up timeout/error/no-output/413
@@ -143,7 +153,7 @@ export default class WebServer {
             : undefined;
         this.sessionStore = new SessionMemoryStorage(undefined, persistPath);
         this.app.use(cacheControlMw);
-        this.app.use(koaSessMw(this.sessionCookieName, this.sessionStore));
+        this.app.use(koaSessMw(this.sessionCookieName, this.sessionStore, this.legacySessionCookieName));
         this.app.use(ctxVarsMw);
         this.app.use(ctxUtilsMw);
 
@@ -171,7 +181,9 @@ export default class WebServer {
         // Setting up SocketIO
         // ===================
         this.io = new SocketIO(HttpClass.createServer(), { serveClient: false });
-        this.io.use(socketioSessMw(this.sessionCookieName, this.sessionStore, this.app.keys as string[]));
+        this.io.use(
+            socketioSessMw(this.sessionCookieName, this.sessionStore, this.app.keys as string[], this.legacySessionCookieName),
+        );
         this.webSocket = new WebSocket(this.io);
         //@ts-expect-error handleConnection expects extended socket type
         this.io.on('connection', this.webSocket.handleConnection.bind(this.webSocket));
@@ -190,8 +202,20 @@ export default class WebServer {
         //Calls the appropriate callback
         try {
             // console.debug(`HTTP ${req.method} ${req.url}`);
-            if (!checkHttpLoad()) return;
-            if (!checkRateLimit(req?.socket?.remoteAddress)) return;
+            if (!checkHttpLoad()) {
+                res.statusCode = 503;
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Connection', 'close');
+                res.end('Service Unavailable');
+                return;
+            }
+            if (!checkRateLimit(req?.socket?.remoteAddress)) {
+                res.statusCode = 429;
+                res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+                res.setHeader('Connection', 'close');
+                res.end('Too Many Requests');
+                return;
+            }
             if (req.url.startsWith('/socket.io')) {
                 (this.io.engine as any).handleRequest(req, res);
             } else {
@@ -216,7 +240,6 @@ export default class WebServer {
                     'You can also try restarting the host machine.',
                 ]);
             };
-            //@ts-expect-error custom callback signature for HTTP handler
             this.httpServer = HttpClass.createServer(this.httpCallbackHandler.bind(this));
             // this.httpServer = HttpClass.createServer((req, res) => {
             //     // const reqSize = parseInt(req.headers['content-length'] || '0');

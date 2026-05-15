@@ -2,18 +2,48 @@
  * fxPanel Addon SDK
  *
  * Runtime SDK for fxPanel addon server processes.
- * Each addon runs in a child process spawned by fxPanel core.
- * Communication happens entirely via Node.js IPC (process.send/process.on).
+ *
+ * Two transport modes are supported transparently:
+ *   1. CHILD-PROCESS / WORKER  — addon runs in its own Node process or worker.
+ *      IPC uses process.send / process.on('message').
+ *   2. IN-PROCESS              — addon runs in the same realm as fxPanel core
+ *      (used on Linux/cfx-server hosts where no separate Node binary is
+ *      available and worker_threads cannot be safely terminated). IPC uses a
+ *      per-addon channel object handed to createAddon() via globalThis.
+ *
+ * The addon author writes the same code either way: `createAddon()`.
  */
 
 /**
  * Creates and returns an addon instance that communicates with fxPanel core.
  */
 export function createAddon() {
-    const addonId = process.env.ADDON_ID;
+    // In-process runtime hands us a channel object via a single-shot global
+    // slot consumed synchronously during the addon module's top-level execution.
+    const pending = globalThis.__TX_PENDING_ADDON__;
+    const channel = pending && typeof pending === 'object' ? pending.channel : null;
+    if (pending) {
+        // Consume immediately so concurrent loads cannot collide.
+        delete globalThis.__TX_PENDING_ADDON__;
+    }
+
+    const addonId = (pending && typeof pending === 'object' && pending.addonId) || process.env.ADDON_ID;
     if (!addonId) {
         throw new Error('@fxpanel/addon-sdk: ADDON_ID environment variable not set. Is this running inside fxPanel?');
     }
+
+    // Abstract IPC: in-process uses the channel; otherwise process.send/on.
+    const transport = channel
+        ? {
+            send: (m) => channel.sendToCore(m),
+            onMessage: (fn) => channel.onCoreMessage(fn),
+            isInProcess: true,
+        }
+        : {
+            send: (m) => { if (process.send) process.send(m); },
+            onMessage: (fn) => process.on('message', fn),
+            isInProcess: false,
+        };
 
     let permissions = [];
     let isReady = false;
@@ -35,9 +65,7 @@ export function createAddon() {
      * Send an IPC message to the core.
      */
     function send(message) {
-        if (process.send) {
-            process.send(message);
-        }
+        try { transport.send(message); } catch { /* channel closed */ }
     }
 
     // ============================================
@@ -201,7 +229,7 @@ export function createAddon() {
     // ============================================
     // IPC Message Handler
     // ============================================
-    process.on('message', async (msg) => {
+    transport.onMessage(async (msg) => {
         if (!msg || typeof msg !== 'object' || !msg.type) return;
 
         switch (msg.type) {
@@ -211,7 +239,14 @@ export function createAddon() {
             }
 
             case 'shutdown': {
-                // Give addon a chance to clean up
+                // In-process: nothing to do. Core will close the channel and
+                // detach right after this message is dispatched, so any further
+                // sends from the addon become no-ops. We never call
+                // process.exit() because we share the host realm.
+                if (transport.isInProcess) {
+                    break;
+                }
+                // Child / worker: exit normally.
                 process.exit(0);
                 break;
             }
@@ -255,7 +290,10 @@ export function createAddon() {
                             name: admin.name,
                             permissions: admin.permissions,
                             isMaster: !!admin.isMaster,
-                            hasPermission: (perm) => !!admin.isMaster || admin.permissions.includes('all_permissions') || admin.permissions.includes(perm),
+                            hasPermission: (perm) =>
+                                !!admin.isMaster ||
+                                admin.permissions.includes('all_permissions') ||
+                                admin.permissions.includes(perm),
                         },
                     };
 
@@ -415,30 +453,35 @@ export function createAddon() {
         }
     });
 
-    // Handle uncaught errors
-    process.on('uncaughtException', (error) => {
-        send({
-            type: 'error',
-            payload: {
-                message: `Uncaught exception: ${error.message}`,
-                stack: error.stack,
-            },
+    // Handle uncaught errors. Skip in inprocess mode — we share the host
+    // process and must not steal its global error handlers.
+    if (!transport.isInProcess) {
+        process.on('uncaughtException', (error) => {
+            send({
+                type: 'error',
+                payload: {
+                    message: `Uncaught exception: ${error.message}`,
+                    stack: error.stack,
+                },
+            });
         });
-    });
 
-    process.on('unhandledRejection', (reason) => {
-        send({
-            type: 'error',
-            payload: {
-                message: `Unhandled rejection: ${reason}`,
-                stack: reason instanceof Error ? reason.stack : undefined,
-            },
+        process.on('unhandledRejection', (reason) => {
+            send({
+                type: 'error',
+                payload: {
+                    message: `Unhandled rejection: ${reason}`,
+                    stack: reason instanceof Error ? reason.stack : undefined,
+                },
+            });
         });
-    });
+    }
 
     return {
         id: addonId,
-        get permissions() { return [...permissions]; },
+        get permissions() {
+            return [...permissions];
+        },
         storage,
         players,
         registerRoute,

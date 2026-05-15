@@ -35,6 +35,15 @@ function ActionsTimelineChart({ daily }: Props) {
         warns: d.warns,
         kicks: d.kicks,
     }));
+    const tickValues =
+        data.length > 30
+            ? data.reduce<string[]>((values, entry, index) => {
+                  if (index % Math.ceil(data.length / 15) === 0) {
+                      values.push(entry.day as string);
+                  }
+                  return values;
+              }, [])
+            : undefined;
 
     const colors = isDarkMode ? ['#fb7185', '#f59e0b', '#38bdf8'] : ['#e11d48', '#d97706', '#0284c7'];
 
@@ -55,10 +64,7 @@ function ActionsTimelineChart({ daily }: Props) {
                     tickSize: 5,
                     tickPadding: 5,
                     tickRotation: -45,
-                    tickValues:
-                        data.length > 30
-                            ? data.filter((_, i) => i % Math.ceil(data.length / 15) === 0).map((d) => d.day as string)
-                            : undefined,
+                    tickValues,
                 }}
                 axisLeft={{
                     tickSize: 5,

@@ -40,7 +40,15 @@ function HistoryItem({ action, serverTime, modalOpener }: HistoryItemProps) {
             onClick={() => {
                 modalOpener(action.id);
             }}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    if (e.key === ' ') e.preventDefault();
+                    modalOpener(action.id);
+                }
+            }}
             className={cn('hover:bg-muted bg-muted/30 cursor-pointer rounded-r-sm border-l-4 pl-2', borderColorClass)}
+            role="button"
+            tabIndex={0}
         >
             <div className="flex w-full justify-between">
                 <strong className="text-muted-foreground text-sm">{actionMessage}</strong>

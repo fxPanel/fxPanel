@@ -7,11 +7,11 @@ import { atomWithReset } from 'jotai/utils';
  * NOTE: copypasted from playerModal.ts
  */
 export const actionModalOpenAtom = atomWithReset(false);
-export const actionModalRefAtom = atomWithReset<string | undefined>(undefined);
+const actionModalRefAtom = atomWithReset<string | undefined>(undefined);
 export const actionModalUrlParam = 'actionModal';
 
 //Helper to set the URL search param
-export const setActionModalUrlParam = (ref: string | undefined) => {
+const setActionModalUrlParam = (ref: string | undefined) => {
     setUrlSearchParam(actionModalUrlParam, ref);
 };
 
@@ -27,7 +27,7 @@ export const useOpenActionModal = () => {
 };
 
 //Hook to close the action modal
-export const useCloseActionModal = () => {
+const useCloseActionModal = () => {
     const setModalOpen = useSetAtom(actionModalOpenAtom);
     return () => {
         setActionModalUrlParam(undefined);

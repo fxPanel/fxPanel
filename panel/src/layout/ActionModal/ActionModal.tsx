@@ -24,22 +24,22 @@ type ModalTab = {
 const baseTabs: ModalTab[] = [
     {
         title: 'Info',
-        icon: <InfoIcon className="xs:block mr-2 hidden h-5 w-5" />,
+        icon: <InfoIcon className="xs:block mr-2 hidden size-5" />,
     },
     {
         title: 'IDs',
-        icon: <ListIcon className="xs:block mr-2 hidden h-5 w-5" />,
+        icon: <ListIcon className="xs:block mr-2 hidden size-5" />,
     },
 ];
 
 const editTab: ModalTab = {
     title: 'Edit',
-    icon: <PencilIcon className="xs:block mr-2 hidden h-5 w-5" />,
+    icon: <PencilIcon className="xs:block mr-2 hidden size-5" />,
 };
 
 const revokeTab: ModalTab = {
     title: 'Revoke',
-    icon: <Undo2Icon className="xs:block mr-2 hidden h-5 w-5" />,
+    icon: <Undo2Icon className="xs:block mr-2 hidden size-5" />,
     className: 'hover:bg-destructive hover:text-destructive-foreground',
 };
 

@@ -204,7 +204,7 @@ export const processPerfLog = (perfLog: SvRtLogFilteredType, perfProcessor: Perf
 /**
  * Get thread display name
  */
-export const getThreadDisplayName = (thread: string) => {
+const getThreadDisplayName = (thread: string) => {
     switch (thread) {
         case 'svSync':
             return 'Sync';
@@ -232,12 +232,14 @@ export const getServerStatsData = (lifespans: PerfLifeSpanType[], windowHours: n
         if (lifespanEnd < windowStart) continue;
 
         for (const snap of lifespan.log) {
+            const snapEnd = snap.end.getTime();
+            const snapStart = snap.start.getTime();
             playerCounts.push(snap.players);
-            if (snap.end.getTime() < windowStart) continue;
-            if (snap.start.getTime() < windowStart) {
-                uptime += snap.end.getTime() - windowStart;
+            if (snapEnd < windowStart) continue;
+            if (snapStart < windowStart) {
+                uptime += snapEnd - windowStart;
             } else {
-                uptime += snap.end.getTime() - snap.start.getTime();
+                uptime += snapEnd - snapStart;
             }
         }
     }

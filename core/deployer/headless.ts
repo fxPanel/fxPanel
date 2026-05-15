@@ -19,6 +19,7 @@ import path from 'node:path';
 import { Deployer } from './index';
 import { nanoid } from 'nanoid';
 import got from 'got';
+import { assertSafeRemoteRecipeUrl } from '../lib/remoteRecipeDownloadUrl.js';
 
 const parseArgs = (argv: string[]) => {
     const args = argv.slice(2);
@@ -71,8 +72,15 @@ const main = async () => {
     //Resolve recipe text
     let recipeText: string;
     if (args.recipe.startsWith('http://') || args.recipe.startsWith('https://')) {
-        console.log(`Downloading recipe from ${args.recipe}...`);
-        recipeText = await got(args.recipe, { timeout: { request: 30_000 } }).text();
+        let recipeUrl: URL;
+        try {
+            recipeUrl = assertSafeRemoteRecipeUrl(args.recipe);
+        } catch (err: any) {
+            console.error(err?.message ?? String(err));
+            process.exit(1);
+        }
+        console.log(`Downloading recipe from ${recipeUrl.href}...`);
+        recipeText = await got(recipeUrl, { timeout: { request: 30_000 }, followRedirect: true, maxRedirects: 5 }).text();
     } else {
         const recipePath = path.resolve(args.recipe);
         console.log(`Loading recipe from ${recipePath}...`);

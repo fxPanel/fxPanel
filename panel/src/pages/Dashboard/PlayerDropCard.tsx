@@ -47,7 +47,7 @@ const PieCenterText = ({ centerX, centerY, dataWithArc, innerRadius, active }: P
             </>
         );
     } else {
-        const totalDrops = useMemo(() => dataWithArc.reduce((acc, d) => acc + d.data.count, 0), [dataWithArc]);
+        const totalDrops = dataWithArc.reduce((acc, d) => acc + d.data.count, 0);
         return (
             <>
                 <text
@@ -206,10 +206,12 @@ export default function PlayerDropCard() {
     }
 
     return (
-        <div className="bg-card flex h-80 max-h-80 flex-col rounded-xl border border-border/60 py-2 shadow-sm">
-            <div className="flex flex-row items-center justify-between space-y-0 px-4 pb-2">
-                <h3 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Player Drops (last 6h)</h3>
-                <DoorOpenIcon className="h-3.5 w-3.5 text-muted-foreground/30" />
+        <div className="bg-card border-border/60 flex h-80 max-h-80 flex-col rounded-xl border py-2 shadow-sm">
+            <div className="flex flex-row items-center justify-between px-4 pb-2">
+                <h3 className="text-muted-foreground/50 text-[10px] font-semibold tracking-widest uppercase">
+                    Player Drops (last 6h)
+                </h3>
+                <DoorOpenIcon className="text-muted-foreground/30 size-3.5" />
             </div>
             {/* <div className='font-mono'>
                 {Object.entries(playerDropCategories).map(([reason, { label, color }]) => {
@@ -223,7 +225,8 @@ export default function PlayerDropCard() {
                 <div className="mx-auto flex flex-wrap justify-center gap-2 px-4">
                     {displayLegends.map((legend) => {
                         return (
-                            <div
+                            <button
+                                type="button"
                                 key={legend.id}
                                 data-active={activeId === legend.id}
                                 className="flex cursor-pointer items-center hover:underline data-[active=true]:underline"
@@ -237,7 +240,7 @@ export default function PlayerDropCard() {
                                     }}
                                 />
                                 <span className="text-sm">{legend.label}</span>
-                            </div>
+                            </button>
                         );
                     })}
                 </div>

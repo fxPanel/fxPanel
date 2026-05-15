@@ -20,7 +20,9 @@ export default function ScreenshotDialog({
     playerName,
 }: ScreenshotDialogProps) {
     const imageSrc = imageData
-        ? imageData.startsWith('data:') ? imageData : `data:image/jpeg;base64,${imageData}`
+        ? imageData.startsWith('data:')
+            ? imageData
+            : `data:image/jpeg;base64,${imageData}`
         : null;
 
     const handleDownload = () => {
@@ -36,13 +38,13 @@ export default function ScreenshotDialog({
             <DialogContent className="max-w-4xl [&>button.absolute]:hidden">
                 <DialogHeader>
                     <div className="flex items-center justify-between">
-                        <DialogTitle>Screenshot — {playerName}</DialogTitle>
+                        <DialogTitle>Screenshot: {playerName}</DialogTitle>
                         <DialogDescription className="sr-only">
                             Screenshot capture of player {playerName}
                         </DialogDescription>
                         {imageSrc && (
                             <Button variant="outline" size="sm" onClick={handleDownload}>
-                                <DownloadIcon className="mr-1 h-4 w-4" /> Save
+                                <DownloadIcon className="mr-1 size-4" /> Save
                             </Button>
                         )}
                     </div>
@@ -50,8 +52,8 @@ export default function ScreenshotDialog({
                 <div className="flex min-h-[300px] items-center justify-center">
                     {loading && (
                         <div className="text-muted-foreground flex flex-col items-center gap-2">
-                            <Loader2Icon className="h-8 w-8 animate-spin" />
-                            <span className="text-sm">Capturing screenshot...</span>
+                            <Loader2Icon className="size-8 animate-spin" />
+                            <span className="text-sm">Capturing screenshot…</span>
                         </div>
                     )}
                     {error && <p className="text-destructive text-center">{error}</p>}

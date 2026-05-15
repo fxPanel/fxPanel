@@ -95,7 +95,7 @@ class LimitedArray<T> extends Array<T> {
  * Module responsible for monitoring the FXServer health and status, restarting it if necessary.
  */
 export default class FxMonitor {
-    public readonly timers: NodeJS.Timer[] = [];
+    public readonly timers: ReturnType<typeof setInterval>[] = [];
 
     //Status tracking
     private readonly statusLog = new LimitedArray<StatusLogEntry>(MAX_LOG_ENTRIES);
@@ -209,7 +209,7 @@ export default class FxMonitor {
             const timesSuffix = result.times ? ` ${result.times}.` : '.';
             const logMessage = `Restarting server: ${result.reason}` + timesSuffix;
             console.error(logMessage);
-            txCore.logger.system.writeSystem('MONITOR', logMessage, 'monitor');
+            txCore.logger.system.writeSystem('MONITOR', logMessage, 'monitor', { actionId: 'monitor.restart' });
             txCore.logger.fxserver.logInformational(logMessage); //just for better visibility
             for (const line of styledIssues) {
                 txCore.logger.fxserver.logInformational(line);
@@ -513,6 +513,7 @@ export default class FxMonitor {
                     'SYSTEM',
                     `changing sv_maxclients back to ${txHostConfig.forceMaxClients}`,
                     'system',
+                    { actionId: 'system.max_clients.corrected' },
                 );
             }
         }
@@ -569,9 +570,10 @@ export default class FxMonitor {
             } catch (error) {
                 console.error(`Failed to save server icon: ${emsg(error) ?? 'Unknown error'}`);
             }
-        } else {
-            txCore.cacheStore.delete(iconCacheKey);
         }
+        // If the server does not advertise an icon in info.json, keep any existing
+        // cached filename (e.g. from `load_server_icon` in server.cfg) so the login
+        // page and panel branding do not lose the configured icon after boot.
 
         //Upserts the runtime data
         txCore.cacheStore.upsert('fxsRuntime:bannerConnecting', infoJson.bannerConnecting);

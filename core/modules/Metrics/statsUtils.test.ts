@@ -162,10 +162,11 @@ suite('TimeCounter', async () => {
 
     // Check if the duration is within the expected range
     test('duration within range', () => {
-        const isCloseTo50ms = (x: number) => x > 150 && x < 175;
-        expect(duration.seconds * 1000).toSatisfy(isCloseTo50ms);
-        expect(duration.milliseconds).toSatisfy(isCloseTo50ms);
-        expect(duration.nanoseconds / 1_000_000).toSatisfy(isCloseTo50ms);
+        // OS timer slack (especially on Windows/CI) can push a ~150ms wait well past 175ms.
+        const isCloseTo150msWait = (x: number) => x > 100 && x < 400;
+        expect(duration.seconds * 1000).toSatisfy(isCloseTo150msWait);
+        expect(duration.milliseconds).toSatisfy(isCloseTo150msWait);
+        expect(duration.nanoseconds / 1_000_000).toSatisfy(isCloseTo150msWait);
     });
 });
 

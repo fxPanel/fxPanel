@@ -5,11 +5,16 @@ type ServerIconProps = {
     serverName?: string;
     gameName?: string;
     iconFilename?: string;
+    /** From `window.txConsts.server.iconDataUrl` — inlined `load_server_icon` / runtime icon for login & NUI. */
+    iconDataUrl?: string;
     className?: string;
     extraClasses?: string;
 };
 
-export function ServerIcon({ serverName, gameName, iconFilename, className, extraClasses }: ServerIconProps) {
+const runtimeIconRegex = /^icon-([a-f0-9]{16})\.(png|jpe?g|gif|webp|svg|ico)$/i;
+
+function ServerIcon({ serverName, gameName, iconFilename, iconDataUrl, className, extraClasses }: ServerIconProps) {
+    const altText = serverName?.trim() ? `${serverName} icon` : 'Server icon';
     let fallbackUrl: string;
     if (gameName === 'fivem') {
         fallbackUrl = '/img/fivem-server-icon.png';
@@ -20,15 +25,20 @@ export function ServerIcon({ serverName, gameName, iconFilename, className, extr
     }
 
     let iconUrl = fallbackUrl;
-    if (iconFilename && /^icon-([a-f0-9]{16})\.png$/.test(iconFilename)) {
-        iconUrl = `/.runtime/${iconFilename}`;
+    if (iconDataUrl) {
+        iconUrl = iconDataUrl;
+    } else if (iconFilename && runtimeIconRegex.test(iconFilename)) {
+        // NUI uses <base href="https://monitor/WebPipe/"> — a leading `/` resolves outside WebPipe.
+        const isWebInterface =
+            typeof window !== 'undefined' && window.txConsts && window.txConsts.isWebInterface === true;
+        iconUrl = isWebInterface ? `/.runtime/${iconFilename}` : `.runtime/${iconFilename}`;
     }
 
     return (
         <ShadcnAvatar className={cn(className, extraClasses)}>
-            <AvatarImage src={iconUrl} alt={serverName} />
+            <AvatarImage src={iconUrl} alt={altText} />
             <AvatarFallback asChild>
-                <img src={fallbackUrl} className="aspect-square h-full w-full rounded-md" />
+                <img src={fallbackUrl} alt={altText} className="aspect-square h-full w-full rounded-md" />
             </AvatarFallback>
         </ShadcnAvatar>
     );

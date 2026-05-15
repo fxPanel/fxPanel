@@ -31,8 +31,8 @@ function DebouncedResizeContainerInner({ delay, onDebouncedResize, children }: D
         };
         lastMeasure.current = measures;
         onDebouncedResize(measures);
-        childRef.current!.style.visibility = 'visible';
-        loaderRef.current!.style.visibility = 'hidden';
+        Object.assign(childRef.current!.style, { visibility: 'visible' });
+        Object.assign(loaderRef.current!.style, { visibility: 'hidden' });
     };
 
     const debouncedResizer = useCallback(debounce(delay, updateSizeState, { atBegin: false }), [containerRef]);
@@ -48,8 +48,8 @@ function DebouncedResizeContainerInner({ delay, onDebouncedResize, children }: D
                 updateSizeState();
             } else {
                 debouncedResizer();
-                childRef.current!.style.visibility = 'hidden';
-                loaderRef.current!.style.visibility = 'visible';
+                Object.assign(childRef.current!.style, { visibility: 'hidden' });
+                Object.assign(loaderRef.current!.style, { visibility: 'visible' });
             }
         });
         resizeObserver.observe(containerRef.current);

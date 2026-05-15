@@ -94,6 +94,8 @@ export type InjectedTxConsts = {
         name: string;
         game: string | undefined;
         icon: string | undefined;
+        /** Inlined icon (from `load_server_icon` / runtime) for login/NUI where `/.runtime/` may not resolve. */
+        iconDataUrl: string | undefined;
         desc: string | undefined;
     };
     hideFxsUpdateNotification: boolean;

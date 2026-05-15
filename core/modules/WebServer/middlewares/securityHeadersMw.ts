@@ -16,10 +16,11 @@ const buildCSP = (isDev: boolean, nonce?: string): string => {
     const cspDirectives: Record<string, string[]> = {
         'default-src': ["'self'"],
         'script-src': isDev
-            ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
-            : ["'self'", `'nonce-${nonce}'`, "'unsafe-eval'"],
+            ? ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'blob:']
+            : ["'self'", `'nonce-${nonce}'`, "'unsafe-eval'", 'blob:'],
+        'worker-src': ["'self'", 'blob:'],
         'style-src': ["'self'", "'unsafe-inline'"],
-        'img-src': ["'self'", 'data:', 'blob:'],
+        'img-src': ["'self'", 'data:', 'blob:', 'https:', 'http:'],
         'font-src': ["'self'"],
         'connect-src': ["'self'", 'ws:', 'wss:'],
         'media-src': ["'self'"],

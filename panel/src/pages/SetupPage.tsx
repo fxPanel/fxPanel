@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useBackendApi } from '@/hooks/fetch';
 import { txToast } from '@/components/TxToaster';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
     Loader2Icon,
     ChevronRightIcon,
@@ -17,7 +18,7 @@ import useSWR from 'swr';
 import { navigate as setLocation } from 'wouter/use-browser-location';
 import { ApiTimeout } from '@/hooks/fetch';
 
-// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// - -  Types - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 type SetupDataResp = {
     redirect?: string;
     error?: string;
@@ -56,7 +57,29 @@ type SaveResp = {
     message?: string;
 };
 
-// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+type SetupPageState = {
+    step: number;
+    serverName: string;
+    deployType: DeploymentType | null;
+    selectedRecipe: RecipeEntry | null;
+    recipeURL: string;
+    recipeName: string;
+    dataFolder: string;
+    detectedConfig: string | undefined;
+    deployPath: string;
+    cfgFile: string;
+    saving: boolean;
+    errorMessage: string | null;
+};
+
+const reduceSetupPageState = (state: SetupPageState, action: Partial<SetupPageState>) => {
+    return {
+        ...state,
+        ...action,
+    };
+};
+
+// - -  Helpers - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 function buildDeployName(templateName: string) {
     const sanitized = templateName
         .replace(/[^a-zA-Z0-9]/g, '')
@@ -73,7 +96,7 @@ function tagColor(tag: string) {
     return 'bg-muted text-muted-foreground';
 }
 
-// â”€â”€ Step Components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// - -  Step Components - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
 /** Step 1: Server Name */
 function StepServerName({
@@ -99,11 +122,10 @@ function StepServerName({
                 placeholder="Happy Server"
                 maxLength={22}
                 minLength={3}
-                autoFocus
             />
             <div className="flex justify-end">
                 <Button onClick={onNext} disabled={!valid}>
-                    Next <ChevronRightIcon className="ml-1 h-4 w-4" />
+                    Next <ChevronRightIcon className="ml-1 size-4" />
                 </Button>
             </div>
         </div>
@@ -115,26 +137,26 @@ function StepDeploymentType({ onSelect }: { onSelect: (t: DeploymentType) => voi
     const cards: { type: DeploymentType; icon: React.ReactNode; title: string; desc: string; badge?: string }[] = [
         {
             type: 'popular',
-            icon: <ServerIcon className="h-8 w-8" />,
+            icon: <ServerIcon className="size-8" />,
             title: 'Popular Recipes',
             desc: 'Choose from a list of popular community recipes.',
             badge: 'RECOMMENDED',
         },
         {
             type: 'local',
-            icon: <FolderOpenIcon className="h-8 w-8" />,
+            icon: <FolderOpenIcon className="size-8" />,
             title: 'Existing Server Data',
             desc: 'Point to an existing server data folder with a server.cfg.',
         },
         {
             type: 'remote',
-            icon: <GlobeIcon className="h-8 w-8" />,
+            icon: <GlobeIcon className="size-8" />,
             title: 'Remote URL Template',
             desc: 'Provide a URL to a recipe YAML file.',
         },
         {
             type: 'custom',
-            icon: <FileCodeIcon className="h-8 w-8" />,
+            icon: <FileCodeIcon className="size-8" />,
             title: 'Custom Template',
             desc: 'Start with a blank recipe and paste your own in the deployer.',
         },
@@ -178,50 +200,50 @@ function StepPopularTemplates({
     onSelect: (recipe: RecipeEntry) => void;
     onBack: () => void;
 }) {
-    const [recipes, setRecipes] = useState<RecipeEntry[] | null>(null);
-    const [fetchError, setFetchError] = useState('');
-
-    useEffect(() => {
+    const recipesKey = `setupRecipeIndex:${forceGameName || 'all'}`;
+    const {
+        data: recipes,
+        error: recipesError,
+        isLoading: isLoadingRecipes,
+    } = useSWR<RecipeEntry[]>(recipesKey, async () => {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10_000);
-        fetch('https://raw.githubusercontent.com/citizenfx/txAdmin-recipes/main/indexv4.json', {
-            signal: controller.signal,
-        })
-            .then((r) => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-                return r.json();
-            })
-            .then((data: RecipeEntry[]) => {
-                let filtered = data;
-                if (forceGameName) {
-                    filtered = data.filter((r) => r.tags.includes(forceGameName));
-                }
-                setRecipes(filtered);
-            })
-            .catch((err) => {
-                if (err.name === 'AbortError') {
-                    setFetchError('Request timed out while loading recipes.');
-                } else {
-                    setFetchError(`Failed to load recipes index: ${err.message}`);
-                }
-            })
-            .finally(() => clearTimeout(timeout));
-        return () => {
+
+        try {
+            const response = await fetch('https://raw.githubusercontent.com/citizenfx/txAdmin-recipes/main/indexv4.json', {
+                signal: controller.signal,
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+            const data = (await response.json()) as RecipeEntry[];
+            if (!forceGameName) return data;
+
+            return data.filter((recipe) => recipe.tags.includes(forceGameName));
+        } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') {
+                throw new Error('Request timed out while loading recipes.');
+            }
+            throw error;
+        } finally {
             clearTimeout(timeout);
-            controller.abort();
-        };
-    }, [forceGameName]);
+        }
+    });
+    const fetchError = recipesError
+        ? recipesError.message === 'Request timed out while loading recipes.'
+            ? recipesError.message
+            : `Failed to load recipes index: ${recipesError.message}`
+        : '';
 
     return (
         <div className="space-y-4">
             <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={onBack}>
-                    <ChevronLeftIcon className="h-4 w-4" />
+                    <ChevronLeftIcon className="size-4" />
                 </Button>
                 <h2 className="text-xl font-semibold">Select a Template</h2>
             </div>
             {fetchError && <p className="text-destructive">{fetchError}</p>}
-            {!recipes && !fetchError && (
+            {isLoadingRecipes && !fetchError && (
                 <div className="flex items-center gap-2">
                     <Loader2Icon className="animate-spin" /> Loading recipesâ€¦
                 </div>
@@ -303,21 +325,27 @@ function StepRemoteURL({
         <div className="space-y-4">
             <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={onBack}>
-                    <ChevronLeftIcon className="h-4 w-4" />
+                    <ChevronLeftIcon className="size-4" />
                 </Button>
                 <h2 className="text-xl font-semibold">Remote Template URL</h2>
             </div>
             <p className="text-muted-foreground text-sm">Paste the URL of a recipe YAML file (must be a raw URL).</p>
+            <Alert variant="destructive">
+                <AlertTitle>Untrusted recipes</AlertTitle>
+                <AlertDescription>
+                    A recipe is executable configuration (including SQL). Only load templates from sources you trust.
+                    Arbitrary URLs or third-party raw files can compromise your server or database if the YAML is malicious.
+                </AlertDescription>
+            </Alert>
             <Input
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleValidate()}
                 placeholder="https://raw.githubusercontent.com/..."
-                autoFocus
             />
             <div className="flex justify-end">
                 <Button onClick={handleValidate} disabled={loading || !url.trim()}>
-                    {loading && <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />}
+                    {loading && <Loader2Icon className="mr-1 size-4 animate-spin" />}
                     Validate
                 </Button>
             </div>
@@ -378,7 +406,7 @@ function StepLocalDataFolder({
         <div className="space-y-4">
             <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={onBack}>
-                    <ChevronLeftIcon className="h-4 w-4" />
+                    <ChevronLeftIcon className="size-4" />
                 </Button>
                 <h2 className="text-xl font-semibold">Existing Server Data Folder</h2>
             </div>
@@ -390,7 +418,6 @@ function StepLocalDataFolder({
                 onChange={(e) => setFolder(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleValidate()}
                 placeholder="/path/to/server-data"
-                autoFocus
             />
             {suggestion && (
                 <div className="border-warning/30 bg-warning-hint flex items-center gap-2 rounded-lg border p-3 text-sm">
@@ -404,7 +431,7 @@ function StepLocalDataFolder({
             )}
             <div className="flex justify-end">
                 <Button onClick={() => handleValidate()} disabled={loading || !folder.trim()}>
-                    {loading && <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />}
+                    {loading && <Loader2Icon className="mr-1 size-4 animate-spin" />}
                     Validate
                 </Button>
             </div>
@@ -418,7 +445,7 @@ function StepCustomInfo({ onNext, onBack }: { onNext: () => void; onBack: () => 
         <div className="space-y-4">
             <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={onBack}>
-                    <ChevronLeftIcon className="h-4 w-4" />
+                    <ChevronLeftIcon className="size-4" />
                 </Button>
                 <h2 className="text-xl font-semibold">Custom Template</h2>
             </div>
@@ -439,7 +466,7 @@ function StepCustomInfo({ onNext, onBack }: { onNext: () => void; onBack: () => 
             </p>
             <div className="flex justify-end">
                 <Button onClick={onNext}>
-                    Next <ChevronRightIcon className="ml-1 h-4 w-4" />
+                    Next <ChevronRightIcon className="ml-1 size-4" />
                 </Button>
             </div>
         </div>
@@ -458,7 +485,8 @@ function StepDeployTarget({
     onValidated: (deployPath: string) => void;
     onBack: () => void;
 }) {
-    const [deployPath, setDeployPath] = useState(defaultPath);
+    const initialDeployPathRef = useRef(defaultPath);
+    const [deployPath, setDeployPath] = useState(initialDeployPathRef.current);
     const [editable, setEditable] = useState(false);
     const [loading, setLoading] = useState(false);
 
@@ -491,7 +519,7 @@ function StepDeployTarget({
         <div className="space-y-4">
             <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={onBack}>
-                    <ChevronLeftIcon className="h-4 w-4" />
+                    <ChevronLeftIcon className="size-4" />
                 </Button>
                 <h2 className="text-xl font-semibold">Deploy Target</h2>
             </div>
@@ -517,7 +545,7 @@ function StepDeployTarget({
             )}
             <div className="flex justify-end">
                 <Button onClick={handleValidate} disabled={loading || !deployPath.trim()}>
-                    {loading && <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />}
+                    {loading && <Loader2Icon className="mr-1 size-4 animate-spin" />}
                     Validate & Continue
                 </Button>
             </div>
@@ -569,7 +597,7 @@ function StepServerCFG({
         <div className="space-y-4">
             <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={onBack}>
-                    <ChevronLeftIcon className="h-4 w-4" />
+                    <ChevronLeftIcon className="size-4" />
                 </Button>
                 <h2 className="text-xl font-semibold">Server CFG File</h2>
             </div>
@@ -581,11 +609,10 @@ function StepServerCFG({
                 onChange={(e) => setCfgFile(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleValidate()}
                 placeholder="server.cfg"
-                autoFocus
             />
             <div className="flex justify-end">
                 <Button onClick={handleValidate} disabled={loading || !cfgFile.trim()}>
-                    {loading && <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />}
+                    {loading && <Loader2Icon className="mr-1 size-4 animate-spin" />}
                     Validate
                 </Button>
             </div>
@@ -593,9 +620,175 @@ function StepServerCFG({
     );
 }
 
-// â”€â”€ Main Setup Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// - -  Main Setup Page - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+type SetupStepContentProps = {
+    step: number;
+    data: SetupDataResp;
+    deployType: DeploymentType | null;
+    serverName: string;
+    setServerName: (value: string) => void;
+    selectedRecipe: RecipeEntry | null;
+    recipeName: string;
+    dataFolder: string;
+    detectedConfig?: string;
+    defaultDeployPath: string;
+    deployPath: string;
+    cfgFile: string;
+    saving: boolean;
+    onSetStep: (step: number) => void;
+    onSelectDeployType: (deployType: DeploymentType) => void;
+    onSelectPopularRecipe: (recipe: RecipeEntry) => void;
+    onValidateRemoteRecipe: (url: string, name: string) => void;
+    onValidateLocalDataFolder: (folder: string, detected?: string) => void;
+    onValidateCfg: (cfg: string) => void;
+    onValidateDeployPath: (path: string) => void;
+    onSave: () => void;
+};
+
+const SetupStepContent = ({
+    step,
+    data,
+    deployType,
+    serverName,
+    setServerName,
+    selectedRecipe,
+    recipeName,
+    dataFolder,
+    detectedConfig,
+    defaultDeployPath,
+    deployPath,
+    cfgFile,
+    saving,
+    onSetStep,
+    onSelectDeployType,
+    onSelectPopularRecipe,
+    onValidateRemoteRecipe,
+    onValidateLocalDataFolder,
+    onValidateCfg,
+    onValidateDeployPath,
+    onSave,
+}: SetupStepContentProps) => {
+    if (step === 0) {
+        return <StepServerName serverName={serverName} setServerName={setServerName} onNext={() => onSetStep(1)} />;
+    }
+
+    if (step === 1) {
+        return (
+            <StepDeploymentType
+                onSelect={(selectedDeployType) => {
+                    onSelectDeployType(selectedDeployType);
+                    onSetStep(2);
+                }}
+            />
+        );
+    }
+
+    if (step === 2) {
+        if (deployType === 'popular') {
+            return (
+                <StepPopularTemplates
+                    engineVersion={data.deployerEngineVersion}
+                    forceGameName={data.forceGameName}
+                    onSelect={onSelectPopularRecipe}
+                    onBack={() => onSetStep(1)}
+                />
+            );
+        }
+        if (deployType === 'remote') {
+            return <StepRemoteURL onValidated={onValidateRemoteRecipe} onBack={() => onSetStep(1)} />;
+        }
+        if (deployType === 'local') {
+            return <StepLocalDataFolder onValidated={onValidateLocalDataFolder} onBack={() => onSetStep(1)} />;
+        }
+        if (deployType === 'custom') {
+            return <StepCustomInfo onNext={() => onSetStep(3)} onBack={() => onSetStep(1)} />;
+        }
+    }
+
+    if (step === 3) {
+        if (deployType === 'local') {
+            return (
+                <StepServerCFG
+                    detectedConfig={detectedConfig}
+                    dataFolder={dataFolder}
+                    onValidated={onValidateCfg}
+                    onBack={() => onSetStep(2)}
+                />
+            );
+        }
+
+        return (
+            <StepDeployTarget
+                defaultPath={defaultDeployPath}
+                hasCustomDataPath={data.hasCustomDataPath}
+                onValidated={onValidateDeployPath}
+                onBack={() => onSetStep(2)}
+            />
+        );
+    }
+
+    if (step === 4) {
+        const isLocal = deployType === 'local';
+        return (
+            <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => onSetStep(3)}>
+                        <ChevronLeftIcon className="size-4" />
+                    </Button>
+                    <h2 className="text-xl font-semibold">Ready to Go</h2>
+                </div>
+                <div className="bg-muted/50 space-y-2 rounded-lg p-4 text-sm">
+                    <div>
+                        <strong>Server Name:</strong> {serverName}
+                    </div>
+                    <div>
+                        <strong>Type:</strong> {deployType}
+                    </div>
+                    {isLocal ? (
+                        <>
+                            <div>
+                                <strong>Data Folder:</strong> <code className="text-xs">{dataFolder}</code>
+                            </div>
+                            <div>
+                                <strong>CFG File:</strong> <code className="text-xs">{cfgFile}</code>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            {(selectedRecipe || recipeName) && (
+                                <div>
+                                    <strong>Recipe:</strong> {selectedRecipe?.name || recipeName}
+                                </div>
+                            )}
+                            <div>
+                                <strong>Deploy Path:</strong> <code className="text-xs">{deployPath}</code>
+                            </div>
+                        </>
+                    )}
+                </div>
+                <div className="flex justify-end">
+                    <Button onClick={onSave} disabled={saving}>
+                        {saving && <Loader2Icon className="mr-1 size-4 animate-spin" />}
+                        {isLocal ? (
+                            <>
+                                <CheckIcon className="mr-1 size-4" /> Save & Start Server
+                            </>
+                        ) : (
+                            <>
+                                Go to Recipe Deployer <ChevronRightIcon className="ml-1 size-4" />
+                            </>
+                        )}
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    return null;
+};
+
 export default function SetupPage() {
-    // â”€â”€ Data fetch â”€â”€
+    // - -  Data fetch - - 
     const dataApi = useBackendApi<SetupDataResp>({
         method: 'GET',
         path: '/setup/data',
@@ -611,19 +804,22 @@ export default function SetupPage() {
     };
     const { data, isLoading } = useSWR('/setup/data', swrFetcher, { revalidateOnFocus: false });
 
-    // â”€â”€ Wizard state â”€â”€
-    const [step, setStep] = useState(0); // 0-based, auto-advanced if skipServerName
-    const [serverName, setServerName] = useState('');
-    const [deployType, setDeployType] = useState<DeploymentType | null>(null);
-    const [selectedRecipe, setSelectedRecipe] = useState<RecipeEntry | null>(null);
-    const [recipeURL, setRecipeURL] = useState('');
-    const [recipeName, setRecipeName] = useState('');
-    const [dataFolder, setDataFolder] = useState('');
-    const [detectedConfig, setDetectedConfig] = useState<string | undefined>();
-    const [deployPath, setDeployPath] = useState('');
-    const [cfgFile, setCfgFile] = useState('');
-    const [saving, setSaving] = useState(false);
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    // - -  Wizard state - - 
+    const [state, dispatch] = useReducer(reduceSetupPageState, {
+        step: 0,
+        serverName: '',
+        deployType: null,
+        selectedRecipe: null,
+        recipeURL: '',
+        recipeName: '',
+        dataFolder: '',
+        detectedConfig: undefined,
+        deployPath: '',
+        cfgFile: '',
+        saving: false,
+        errorMessage: null,
+    });
+    const { step, serverName, deployType, selectedRecipe, recipeURL, recipeName, dataFolder, detectedConfig, deployPath, cfgFile, saving, errorMessage } = state;
     const initRef = useRef(false);
 
     const saveApi = useBackendApi<SaveResp>({
@@ -641,13 +837,13 @@ export default function SetupPage() {
         }
         if (data.error) {
             txToast.error(data.error);
-            setErrorMessage(data.error);
+            dispatch({ errorMessage: data.error });
             return;
         }
-        setServerName(data.serverName);
-        if (data.skipServerName) {
-            setStep(1); // skip name step
-        }
+        dispatch({
+            serverName: data.serverName,
+            step: data.skipServerName ? 1 : 0,
+        });
     }, [data]);
 
     // Build default deploy path when recipe is selected
@@ -673,10 +869,10 @@ export default function SetupPage() {
         return `${sanitized}_${deploymentTs}`;
     }, [recipeName, selectedRecipe?.name, deploymentTs]);
 
-    // â”€â”€ Save handler â”€â”€
+    // - -  Save handler - - 
     const performSave = useCallback(() => {
         if (!deployType) return;
-        setSaving(true);
+        dispatch({ saving: true });
         let payload: Record<string, any>;
 
         if (deployType === 'popular') {
@@ -719,7 +915,7 @@ export default function SetupPage() {
             timeout: ApiTimeout.LONG,
             toastLoadingMessage: 'Savingâ€¦',
             success(resp) {
-                setSaving(false);
+                dispatch({ saving: false });
                 if (resp.success) {
                     if (deployType === 'local') {
                         txToast.success('Server saved. Startingâ€¦');
@@ -732,22 +928,22 @@ export default function SetupPage() {
                 }
             },
             error(msg) {
-                setSaving(false);
+                dispatch({ saving: false });
                 txToast.error(msg);
             },
         });
     }, [deployType, serverName, selectedRecipe, recipeURL, deployPath, deploymentID, dataFolder, cfgFile, saveApi]);
 
-    // â”€â”€ Loading state â”€â”€
+    // - -  Loading state - - 
     if (isLoading || !data) {
         return (
             <div className="flex h-full items-center justify-center">
-                <Loader2Icon className="h-8 w-8 animate-spin" />
+                <Loader2Icon className="size-8 animate-spin" />
             </div>
         );
     }
 
-    // â”€â”€ Error state â”€â”€
+    // - -  Error state - - 
     if (errorMessage) {
         return (
             <div className="flex h-full flex-col items-center justify-center gap-3">
@@ -757,167 +953,12 @@ export default function SetupPage() {
         );
     }
 
-    // â”€â”€ Step progress indicator â”€â”€
+    // - -  Step progress indicator - - 
     const totalSteps = deployType === 'local' ? 4 : 4; // name, type, template/path, target/cfg â†’ save
     const stepLabels =
         deployType === 'local'
             ? ['Server Name', 'Type', 'Data Folder', 'CFG File']
             : ['Server Name', 'Type', 'Template', 'Deploy Target'];
-
-    // â”€â”€ Render current step â”€â”€
-    const renderStep = () => {
-        // Step 0: Server Name
-        if (step === 0) {
-            return <StepServerName serverName={serverName} setServerName={setServerName} onNext={() => setStep(1)} />;
-        }
-
-        // Step 1: Deployment Type
-        if (step === 1) {
-            return (
-                <StepDeploymentType
-                    onSelect={(t) => {
-                        setDeployType(t);
-                        setStep(2);
-                    }}
-                />
-            );
-        }
-
-        // Step 2: Template / Path selection (varies by type)
-        if (step === 2) {
-            if (deployType === 'popular') {
-                return (
-                    <StepPopularTemplates
-                        engineVersion={data.deployerEngineVersion}
-                        forceGameName={data.forceGameName}
-                        onSelect={(recipe) => {
-                            setSelectedRecipe(recipe);
-                            setRecipeName(recipe.name);
-                            setRecipeURL(recipe.url);
-                            setStep(3);
-                        }}
-                        onBack={() => setStep(1)}
-                    />
-                );
-            }
-            if (deployType === 'remote') {
-                return (
-                    <StepRemoteURL
-                        onValidated={(url, name) => {
-                            setRecipeURL(url);
-                            setRecipeName(name);
-                            setStep(3);
-                        }}
-                        onBack={() => setStep(1)}
-                    />
-                );
-            }
-            if (deployType === 'local') {
-                return (
-                    <StepLocalDataFolder
-                        onValidated={(folder, detected) => {
-                            setDataFolder(folder);
-                            setDetectedConfig(detected);
-                            setStep(3);
-                        }}
-                        onBack={() => setStep(1)}
-                    />
-                );
-            }
-            if (deployType === 'custom') {
-                return <StepCustomInfo onNext={() => setStep(3)} onBack={() => setStep(1)} />;
-            }
-        }
-
-        // Step 3: Deploy Target or CFG
-        if (step === 3) {
-            if (deployType === 'local') {
-                return (
-                    <StepServerCFG
-                        detectedConfig={detectedConfig}
-                        dataFolder={dataFolder}
-                        onValidated={(cfg) => {
-                            setCfgFile(cfg);
-                            setStep(4);
-                        }}
-                        onBack={() => setStep(2)}
-                    />
-                );
-            }
-            // popular / remote / custom
-            return (
-                <StepDeployTarget
-                    defaultPath={defaultDeployPath}
-                    hasCustomDataPath={data.hasCustomDataPath}
-                    onValidated={(path) => {
-                        setDeployPath(path);
-                        setStep(4);
-                    }}
-                    onBack={() => setStep(2)}
-                />
-            );
-        }
-
-        // Step 4: Finish / Save
-        if (step === 4) {
-            const isLocal = deployType === 'local';
-            return (
-                <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => setStep(3)}>
-                            <ChevronLeftIcon className="h-4 w-4" />
-                        </Button>
-                        <h2 className="text-xl font-semibold">Ready to Go</h2>
-                    </div>
-                    <div className="bg-muted/50 space-y-2 rounded-lg p-4 text-sm">
-                        <div>
-                            <strong>Server Name:</strong> {serverName}
-                        </div>
-                        <div>
-                            <strong>Type:</strong> {deployType}
-                        </div>
-                        {isLocal ? (
-                            <>
-                                <div>
-                                    <strong>Data Folder:</strong> <code className="text-xs">{dataFolder}</code>
-                                </div>
-                                <div>
-                                    <strong>CFG File:</strong> <code className="text-xs">{cfgFile}</code>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                {(selectedRecipe || recipeName) && (
-                                    <div>
-                                        <strong>Recipe:</strong> {selectedRecipe?.name || recipeName}
-                                    </div>
-                                )}
-                                <div>
-                                    <strong>Deploy Path:</strong> <code className="text-xs">{deployPath}</code>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                    <div className="flex justify-end">
-                        <Button onClick={performSave} disabled={saving}>
-                            {saving && <Loader2Icon className="mr-1 h-4 w-4 animate-spin" />}
-                            {isLocal ? (
-                                <>
-                                    <CheckIcon className="mr-1 h-4 w-4" /> Save & Start Server
-                                </>
-                            ) : (
-                                <>
-                                    Go to Recipe Deployer <ChevronRightIcon className="ml-1 h-4 w-4" />
-                                </>
-                            )}
-                        </Button>
-                    </div>
-                </div>
-            );
-        }
-
-        return null;
-    };
 
     return (
         <div className="mx-auto w-full max-w-(--breakpoint-md) space-y-6 px-2 py-4 md:px-0">
@@ -935,7 +976,7 @@ export default function SetupPage() {
                     return (
                         <div key={label} className="flex flex-1 items-center gap-1">
                             <div
-                                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                                className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                                     isDone
                                         ? 'bg-primary text-primary-foreground'
                                         : isActive
@@ -943,7 +984,7 @@ export default function SetupPage() {
                                           : 'border-muted-foreground/30 text-muted-foreground border'
                                 }`}
                             >
-                                {isDone ? <CheckIcon className="h-3 w-3" /> : i + 1}
+                                {isDone ? <CheckIcon className="size-3" /> : i + 1}
                             </div>
                             <span
                                 className={`hidden text-xs sm:inline ${isActive ? 'text-primary font-semibold' : 'text-muted-foreground'}`}
@@ -959,7 +1000,54 @@ export default function SetupPage() {
             </div>
 
             {/* Step Content */}
-            <div className="rounded-lg border p-6">{renderStep()}</div>
+            <div className="rounded-lg border p-6">
+                <SetupStepContent
+                    step={step}
+                    data={data}
+                    deployType={deployType}
+                    serverName={serverName}
+                    setServerName={(value) => dispatch({ serverName: value })}
+                    selectedRecipe={selectedRecipe}
+                    recipeName={recipeName}
+                    dataFolder={dataFolder}
+                    detectedConfig={detectedConfig}
+                    defaultDeployPath={defaultDeployPath}
+                    deployPath={deployPath}
+                    cfgFile={cfgFile}
+                    saving={saving}
+                    onSetStep={(nextStep) => dispatch({ step: nextStep })}
+                    onSelectDeployType={(nextDeployType) => dispatch({ deployType: nextDeployType })}
+                    onSelectPopularRecipe={(recipe) => {
+                        dispatch({
+                            selectedRecipe: recipe,
+                            recipeName: recipe.name,
+                            recipeURL: recipe.url,
+                            step: 3,
+                        });
+                    }}
+                    onValidateRemoteRecipe={(url, name) => {
+                        dispatch({
+                            recipeURL: url,
+                            recipeName: name,
+                            step: 3,
+                        });
+                    }}
+                    onValidateLocalDataFolder={(folder, detected) => {
+                        dispatch({
+                            dataFolder: folder,
+                            detectedConfig: detected,
+                            step: 3,
+                        });
+                    }}
+                    onValidateCfg={(cfg) => {
+                        dispatch({ cfgFile: cfg, step: 4 });
+                    }}
+                    onValidateDeployPath={(path) => {
+                        dispatch({ deployPath: path, step: 4 });
+                    }}
+                    onSave={performSave}
+                />
+            </div>
         </div>
     );
 }

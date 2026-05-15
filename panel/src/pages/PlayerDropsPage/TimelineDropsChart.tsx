@@ -1,10 +1,10 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useReducer, useRef } from 'react';
 import { useIsDarkMode } from '@/hooks/theme';
 import { Button } from '@/components/ui/button';
 import drawDropsTimeline, { TimelineDropsDatum } from './drawDropsTimeline';
 import { playerDropCategories } from '@/lib/playerDropCategories';
 import { PlayerDropsMessage } from './PlayerDropsGenericSubcards';
-import { DrilldownRangeSelectionType } from './PlayerDropsPage';
+import { DrilldownRangeSelectionType } from '@/pages/PlayerDropsPage/PlayerDropsPage';
 import { emsg } from '@shared/emsg';
 
 export type TimelineDropsChartData = {
@@ -46,6 +46,42 @@ type TimelineDropsChartProps = {
     rangeSetter: (range: DrilldownRangeSelectionType) => void;
 };
 
+type TimelineDropsChartRenderState = {
+    renderError: string;
+    errorRetry: number;
+};
+
+type TimelineDropsChartRenderAction =
+    | { type: 'drawSuccess' }
+    | { type: 'drawError'; error: string }
+    | { type: 'retry' };
+
+function reduceTimelineDropsChartRenderState(
+    state: TimelineDropsChartRenderState,
+    action: TimelineDropsChartRenderAction,
+): TimelineDropsChartRenderState {
+    switch (action.type) {
+        case 'drawSuccess':
+            return {
+                ...state,
+                renderError: '',
+                errorRetry: 0,
+            };
+        case 'drawError':
+            return {
+                ...state,
+                renderError: action.error,
+            };
+        case 'retry':
+            return {
+                renderError: '',
+                errorRetry: state.errorRetry + 1,
+            };
+        default:
+            return state;
+    }
+}
+
 function TimelineDropsChart({
     chartData,
     chartName,
@@ -57,8 +93,11 @@ function TimelineDropsChart({
     const svgRef = useRef<SVGSVGElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const legendRef = useRef<HTMLDivElement>(null);
-    const [renderError, setRenderError] = useState('');
-    const [errorRetry, setErrorRetry] = useState(0);
+    const [renderState, dispatchRender] = useReducer(reduceTimelineDropsChartRenderState, {
+        renderError: '',
+        errorRetry: 0,
+    });
+    const { renderError, errorRetry } = renderState;
     const isDarkMode = useIsDarkMode();
     const margins = {
         top: 8,
@@ -85,14 +124,13 @@ function TimelineDropsChart({
                 margins,
                 isDarkMode,
                 data: chartData,
-                setRenderError,
+                setRenderError: (error) => dispatchRender({ type: 'drawError', error }),
                 rangeSetter,
             });
-            setErrorRetry(0);
-            setRenderError('');
+            dispatchRender({ type: 'drawSuccess' });
             console.timeEnd(`drawDropsTimeline-${chartName}`);
         } catch (error) {
-            setRenderError(emsg(error) ?? 'Unknown error.');
+            dispatchRender({ type: 'drawError', error: emsg(error) ?? 'Unknown error.' });
         } finally {
             console.groupEnd();
         }
@@ -107,7 +145,7 @@ function TimelineDropsChart({
         legendRef,
         svgRef,
         canvasRef,
-        renderError,
+        errorRetry,
     ]);
 
     if (!width || !height) return null;
@@ -120,10 +158,7 @@ function TimelineDropsChart({
                     size={'sm'}
                     variant={'outline'}
                     className="text-primary"
-                    onClick={() => {
-                        setErrorRetry((c) => c + 1);
-                        setRenderError('');
-                    }}
+                    onClick={() => dispatchRender({ type: 'retry' })}
                 >
                     Retry{errorRetry ? ` (${errorRetry})` : ''}
                 </Button>

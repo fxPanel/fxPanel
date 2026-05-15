@@ -26,6 +26,11 @@ export type TxDevEnvType = {
     STEAMKEY?: string;
     EXT_STATS_HOST?: string;
     LAUNCH_ARGS?: string[];
+
+    //If set, the dev script only watches & rebuilds; it does NOT spawn FXServer.
+    //Useful when developing on macOS or against a remote/Dockerized FXServer.
+    //Auto-enabled on platforms where FXServer can't run natively (e.g. darwin).
+    NO_SPAWN: boolean; //has default
 };
 type EnvConfigsType<T> = {
     default?: T | T[];
@@ -61,6 +66,10 @@ const envConfigs = {
             const filtered = val.split(/\s+/).filter(Boolean);
             return filtered.length ? filtered : undefined;
         },
+    },
+    NO_SPAWN: {
+        default: false,
+        parser: (val) => Boolean(val),
     },
 } satisfies EnvConfigs;
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -35,18 +35,28 @@ type AdminEditDialogProps = {
     initialData?: AdminAutofillData;
 };
 
+type AdminFormState = {
+    name: string;
+    citizenfxId: string;
+    discordId: string;
+    permissions: string[];
+};
+
 export default function AdminEditDialog({ target, allPresets, onClose, onSaved, initialData }: AdminEditDialogProps) {
     const isNew = target === 'new';
 
-    const [name, setName] = useState(isNew ? (initialData?.name ?? '') : target.name);
-    const [citizenfxId, setCitizenfxId] = useState(isNew ? (initialData?.citizenfxId ?? '') : '');
-    const [discordId, setDiscordId] = useState(isNew ? (initialData?.discordId ?? '') : '');
-    const [permissions, setPermissions] = useState<string[]>(isNew ? [] : target.permissions);
+    const [formState, setFormState] = useState<AdminFormState>({
+        name: isNew ? (initialData?.name ?? '') : target.name,
+        citizenfxId: isNew ? (initialData?.citizenfxId ?? '') : (target.citizenfxId ?? ''),
+        discordId: isNew ? (initialData?.discordId ?? '') : (target.discordId ?? ''),
+        permissions: isNew ? [] : target.permissions,
+    });
     const [isSaving, setIsSaving] = useState(false);
     const [tempPassword, setTempPassword] = useState<string | null>(null);
     const [showConfirm, setShowConfirm] = useState(false);
+    const { name, citizenfxId, discordId, permissions } = formState;
 
-    const [originalPerms] = useState<string[]>(() => (isNew ? [] : target.permissions));
+    const originalPerms = useRef<string[]>(isNew ? [] : target.permissions);
 
     const saveApi = useBackendApi<ApiAdminSaveResp, ApiAdminSaveReq>({
         method: 'POST',
@@ -54,16 +64,20 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
         throwGenericErrors: true,
     });
 
+    const setFormField = <K extends keyof AdminFormState>(key: K, value: AdminFormState[K]) => {
+        setFormState((prev) => ({ ...prev, [key]: value }));
+    };
+
     const applyPreset = (presetId: string) => {
         const preset = allPresets.find((p) => p.id === presetId);
         if (preset) {
-            setPermissions([...preset.permissions]);
+            setFormField('permissions', [...preset.permissions]);
         }
     };
 
     //Compute permission diff
-    const addedPerms = permissions.filter((p) => !originalPerms.includes(p));
-    const removedPerms = originalPerms.filter((p) => !permissions.includes(p));
+    const addedPerms = permissions.filter((p) => !originalPerms.current.includes(p));
+    const removedPerms = originalPerms.current.filter((p) => !permissions.includes(p));
     const hasDiff = addedPerms.length > 0 || removedPerms.length > 0;
     const newDangerous = addedPerms.filter((pid) => registeredPermissions.find((p) => p.id === pid)?.dangerous);
 
@@ -73,7 +87,7 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
             return;
         }
 
-        //Check for dangerous permissions being added â€” require confirmation
+        //Check for dangerous permissions being added - require confirmation
         if (newDangerous.length > 0 && !showConfirm) {
             setShowConfirm(true);
             return;
@@ -118,7 +132,7 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
                 <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <AlertTriangleIcon className="text-destructive h-5 w-5" />
+                            <AlertTriangleIcon className="text-destructive size-5" />
                             Dangerous Permissions
                         </DialogTitle>
                         <DialogDescription>You are granting the following dangerous permissions:</DialogDescription>
@@ -126,7 +140,7 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
                     <div className="space-y-2">
                         {newDangerous.map((pid) => (
                             <div key={pid} className="bg-destructive/10 flex items-center gap-2 rounded-md px-3 py-2">
-                                <AlertTriangleIcon className="text-destructive h-4 w-4 shrink-0" />
+                                <AlertTriangleIcon className="text-destructive size-4 shrink-0" />
                                 <div>
                                     <span className="text-sm font-medium">{permissionsMap.get(pid)?.label ?? pid}</span>
                                     <p className="text-muted-foreground text-xs">
@@ -141,7 +155,7 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
                             Go Back
                         </Button>
                         <Button variant="destructive" onClick={handleSave} disabled={isSaving}>
-                            {isSaving && <Loader2Icon className="mr-1.5 h-4 w-4 animate-spin" />}
+                            {isSaving && <Loader2Icon className="mr-1.5 size-4 animate-spin" />}
                             Confirm & Save
                         </Button>
                     </DialogFooter>
@@ -153,11 +167,19 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
     // Show temp password screen after adding
     if (tempPassword) {
         return (
-            <Dialog open onOpenChange={() => { onSaved(); onClose(); }}>
+            <Dialog
+                open
+                onOpenChange={() => {
+                    onSaved();
+                    onClose();
+                }}
+            >
                 <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle>Admin Created</DialogTitle>
-                        <DialogDescription>A temporary password has been generated; copy it now â€” it will not be shown again.</DialogDescription>
+                        <DialogDescription>
+                            A temporary password has been generated; copy it now - it will not be shown again.
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-3">
                         <p className="text-muted-foreground text-sm">
@@ -175,7 +197,7 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
                                 onClose();
                             }}
                         >
-                            Done
+                            Close
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -192,14 +214,14 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
 
                 <div className="-mx-6 min-h-0 flex-1 overflow-y-auto px-6">
                     <div className="space-y-4 pb-2">
-                        {/* â”€â”€ Identity fields â”€â”€ */}
+                        {/* - -  Identity fields - -  */}
                         <div className="grid gap-3 sm:grid-cols-3">
                             <div className="space-y-1.5">
                                 <Label htmlFor="admin-name">Username</Label>
                                 <Input
                                     id="admin-name"
                                     value={name}
-                                    onChange={(e) => setName(e.target.value)}
+                                    onChange={(e) => setFormField('name', e.target.value)}
                                     placeholder="admin_name"
                                 />
                             </div>
@@ -208,7 +230,7 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
                                 <Input
                                     id="admin-cfx"
                                     value={citizenfxId}
-                                    onChange={(e) => setCitizenfxId(e.target.value)}
+                                    onChange={(e) => setFormField('citizenfxId', e.target.value)}
                                     placeholder="username or fivem:123456"
                                 />
                             </div>
@@ -217,7 +239,7 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
                                 <Input
                                     id="admin-discord"
                                     value={discordId}
-                                    onChange={(e) => setDiscordId(e.target.value)}
+                                    onChange={(e) => setFormField('discordId', e.target.value)}
                                     placeholder="123456789012345678"
                                 />
                             </div>
@@ -225,7 +247,7 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
 
                         <Separator />
 
-                        {/* â”€â”€ Preset selector â”€â”€ */}
+                        {/* - -  Preset selector - -  */}
                         <div className="flex items-center gap-3">
                             <Label className="text-sm font-medium whitespace-nowrap">Apply Preset:</Label>
                             <Select onValueChange={applyPreset}>
@@ -244,10 +266,13 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
 
                         <Separator />
 
-                        {/* â”€â”€ Permissions editor â”€â”€ */}
-                        <PermissionsEditor selected={permissions} onChange={setPermissions} />
+                        {/* - -  Permissions editor - -  */}
+                        <PermissionsEditor
+                            selected={permissions}
+                            onChange={(nextPermissions) => setFormField('permissions', nextPermissions)}
+                        />
 
-                        {/* â”€â”€ Permission diff summary â”€â”€ */}
+                        {/* - -  Permission diff summary - -  */}
                         {!isNew && hasDiff && (
                             <div className="space-y-1.5 rounded-md border p-3">
                                 <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
@@ -289,7 +314,7 @@ export default function AdminEditDialog({ target, allPresets, onClose, onSaved, 
                         Cancel
                     </Button>
                     <Button onClick={handleSave} disabled={isSaving}>
-                        {isSaving && <Loader2Icon className="mr-1.5 h-4 w-4 animate-spin" />}
+                        {isSaving && <Loader2Icon className="mr-1.5 size-4 animate-spin" />}
                         {isNew ? 'Create Admin' : 'Save Changes'}
                     </Button>
                 </DialogFooter>

@@ -1,6 +1,6 @@
 import { color } from 'd3-color';
 
-export type PlayerDropCategoryType = {
+type PlayerDropCategoryType = {
     label: string;
     description: string;
     color: string;

@@ -17,6 +17,7 @@ export default function PromptDialog() {
     const inputRef = useRef<any>(null);
     const dialogState = usePromptDialogState();
     const closeDialog = useClosePromptDialog();
+    const suggestionCounts = new Map<string, number>();
 
     const handleSubmit = () => {
         if (!dialogState.isOpen) return;
@@ -51,7 +52,6 @@ export default function PromptDialog() {
 
                     {dialogState.isMultiline ? (
                         <AutosizeTextarea
-                            autoFocus
                             ref={inputRef}
                             placeholder={dialogState.placeholder}
                             autoComplete="off"
@@ -61,7 +61,6 @@ export default function PromptDialog() {
                         />
                     ) : (
                         <Input
-                            autoFocus
                             ref={inputRef}
                             placeholder={dialogState.placeholder}
                             autoComplete="off"
@@ -71,20 +70,25 @@ export default function PromptDialog() {
                     <DialogFooter className="flex-col gap-2">
                         <div className="flex w-full flex-col flex-wrap gap-2 sm:flex-row sm:justify-start">
                             {dialogState.suggestions &&
-                                dialogState.suggestions.map((suggestion, index) => (
-                                    <Button
-                                        key={index}
-                                        type="button"
-                                        onClick={() => {
-                                            inputRef.current!.value = suggestion;
-                                            handleSubmit();
-                                        }}
-                                        variant="outline"
-                                    >
-                                        <span className="text-muted-foreground mr-auto sm:hidden">Suggestion:</span>
-                                        {suggestion}
-                                    </Button>
-                                ))}
+                                dialogState.suggestions.map((suggestion) => {
+                                    const occurrence = suggestionCounts.get(suggestion) ?? 0;
+                                    suggestionCounts.set(suggestion, occurrence + 1);
+
+                                    return (
+                                        <Button
+                                            key={`${suggestion}:${occurrence}`}
+                                            type="button"
+                                            onClick={() => {
+                                                inputRef.current!.value = suggestion;
+                                                handleSubmit();
+                                            }}
+                                            variant="outline"
+                                        >
+                                            <span className="text-muted-foreground mr-auto sm:hidden">Suggestion:</span>
+                                            {suggestion}
+                                        </Button>
+                                    );
+                                })}
                         </div>
                         {/* TODO: mock for kick as punishment - consider the alternative of making a "timeout" */}
                         {/* <div className="flex flex-col sm:flex-row sm:justify-start gap-2 w-full flex-wrap">

@@ -141,11 +141,11 @@ export default function PlayerDropsPage() {
             {/* Drilldown toolbar */}
             <div className="bg-card/60 border-border/50 flex flex-col gap-2 rounded-xl border px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <div className="flex items-center gap-2 pr-2">
-                    <div className="bg-secondary/40 border-border/50 text-accent/80 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border">
+                    <div className="bg-secondary/40 border-border/50 text-accent/80 flex size-7 shrink-0 items-center justify-center rounded-md border">
                         <CalendarRangeIcon className="size-3.5" />
                     </div>
                     <div className="text-xs">
-                        <div className="font-semibold leading-tight">Drilldown Range</div>
+                        <div className="leading-tight font-semibold">Drilldown Range</div>
                         <div className="text-muted-foreground/70 leading-tight">Pick a window to inspect</div>
                     </div>
                 </div>
@@ -181,7 +181,7 @@ export default function PlayerDropsPage() {
             {swrDataApiResp.data ? (
                 <div className="relative min-h-128">
                     {swrDataApiResp.isValidating && (
-                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/50 rounded-xl">
+                        <div className="bg-background/50 absolute inset-0 z-10 flex items-center justify-center rounded-xl">
                             <DrilldownCardLoading isError={false} />
                         </div>
                     )}

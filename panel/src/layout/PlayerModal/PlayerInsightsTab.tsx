@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { AlertTriangleIcon, ClockIcon, ExternalLinkIcon, ShieldAlertIcon, UserIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { ClientDateText } from '@/components/ClientDateText';
+import { cn, createDuplicateKeyResolver } from '@/lib/utils';
 import { PlayerModalPlayerData } from '@shared/playerApiTypes';
 
 /**
@@ -176,6 +177,9 @@ export default function PlayerInsightsTab({ player, serverTime }: PlayerInsights
     const steamProfileUrl = useMemo(() => getSteamProfileUrl(player.ids), [player.ids]);
     const idChanges = useMemo(() => detectIdChanges(player.ids, player.oldIds), [player.ids, player.oldIds]);
     const risk = useMemo(() => computeRiskFactor(player, idChanges, discordAge), [player, idChanges, discordAge]);
+    const getRiskReasonKey = createDuplicateKeyResolver();
+    const getIdChangeKey = createDuplicateKeyResolver();
+    const getNameHistoryKey = createDuplicateKeyResolver();
 
     if (!player.isRegistered) {
         return (
@@ -190,7 +194,7 @@ export default function PlayerInsightsTab({ player, serverTime }: PlayerInsights
             {/* Risk Factor */}
             <div className={cn('rounded-lg border p-3', riskBgColors[risk.level])}>
                 <div className="mb-2 flex items-center gap-2">
-                    <ShieldAlertIcon className={cn('h-5 w-5', riskColors[risk.level])} />
+                    <ShieldAlertIcon className={cn('size-5', riskColors[risk.level])} />
                     <span className="font-medium">Risk Assessment</span>
                     <span className={cn('ml-auto text-sm font-bold uppercase', riskColors[risk.level])}>
                         {risk.level}
@@ -198,8 +202,8 @@ export default function PlayerInsightsTab({ player, serverTime }: PlayerInsights
                 </div>
                 {risk.reasons.length > 0 ? (
                     <ul className="text-muted-foreground ml-7 space-y-0.5 text-sm">
-                        {risk.reasons.map((reason, i) => (
-                            <li key={i} className="list-disc">
+                        {risk.reasons.map((reason) => (
+                            <li key={getRiskReasonKey(reason)} className="list-disc">
                                 {reason}
                             </li>
                         ))}
@@ -212,7 +216,7 @@ export default function PlayerInsightsTab({ player, serverTime }: PlayerInsights
             {/* Account Ages */}
             <div>
                 <h4 className="text-muted-foreground mb-2 flex items-center gap-1.5 text-sm font-medium">
-                    <ClockIcon className="h-4 w-4" /> Account Ages
+                    <ClockIcon className="size-4" /> Account Ages
                 </h4>
                 <div className="grid grid-cols-3 gap-2">
                     <div className="bg-muted/50 rounded-md p-2.5 text-sm">
@@ -234,7 +238,7 @@ export default function PlayerInsightsTab({ player, serverTime }: PlayerInsights
                                     rel="noopener noreferrer"
                                     className="text-accent inline-flex items-center gap-1 hover:underline"
                                 >
-                                    Profile <ExternalLinkIcon className="h-3 w-3" />
+                                    Profile <ExternalLinkIcon className="size-3" />
                                 </a>
                             ) : (
                                 'N/A'
@@ -243,12 +247,20 @@ export default function PlayerInsightsTab({ player, serverTime }: PlayerInsights
                     </div>
                     <div className="bg-muted/50 rounded-md p-2.5 text-sm">
                         <span className="text-muted-foreground">Server</span>
-                        <div className="font-medium">
-                            {player.tsJoined ? formatAge(new Date(player.tsJoined * 1000)) : 'N/A'}
-                        </div>
+                        <ClientDateText
+                            as="div"
+                            className="font-medium"
+                            timestamp={player.tsJoined ? player.tsJoined * 1000 : null}
+                            formatter={formatAge}
+                            fallback="N/A"
+                        />
                         {player.tsJoined && (
                             <div className="text-muted-foreground text-xs">
-                                Joined {new Date(player.tsJoined * 1000).toLocaleDateString()}
+                                Joined{' '}
+                                <ClientDateText
+                                    timestamp={player.tsJoined * 1000}
+                                    formatter={(date) => date.toLocaleDateString()}
+                                />
                             </div>
                         )}
                     </div>
@@ -259,12 +271,12 @@ export default function PlayerInsightsTab({ player, serverTime }: PlayerInsights
             {idChanges.length > 0 && (
                 <div>
                     <h4 className="text-muted-foreground mb-2 flex items-center gap-1.5 text-sm font-medium">
-                        <AlertTriangleIcon className="text-warning h-4 w-4" /> Identifier Changes
+                        <AlertTriangleIcon className="text-warning size-4" /> Identifier Changes
                     </h4>
                     <div className="space-y-1">
-                        {idChanges.map((change, i) => (
+                        {idChanges.map((change) => (
                             <div
-                                key={i}
+                                key={getIdChangeKey(`${change.type}:${change.oldId}`)}
                                 className="bg-warning/5 border-warning/20 flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm"
                             >
                                 <span className="text-warning font-mono text-xs">{change.type}</span>
@@ -280,13 +292,13 @@ export default function PlayerInsightsTab({ player, serverTime }: PlayerInsights
             {player.nameHistory && player.nameHistory.length > 1 && (
                 <div>
                     <h4 className="text-muted-foreground mb-2 flex items-center gap-1.5 text-sm font-medium">
-                        <UserIcon className="h-4 w-4" /> Name History
+                        <UserIcon className="size-4" /> Name History
                         <span className="text-xs">({player.nameHistory.length} names)</span>
                     </h4>
                     <div className="flex flex-wrap gap-1.5">
                         {player.nameHistory.map((name, i) => (
                             <span
-                                key={i}
+                                key={getNameHistoryKey(name)}
                                 className={cn(
                                     'rounded-md border px-2 py-0.5 text-sm',
                                     i === player.nameHistory!.length - 1

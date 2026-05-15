@@ -82,13 +82,17 @@ export default function ActionLogPage() {
     };
 
     return (
-        <div className="h-contentvh flex w-full flex-col">
-            <PageHeader title="Action Log" icon={<ScrollTextIcon />}>
+        <div className="h-contentvh mx-auto flex w-full max-w-(--breakpoint-xl) flex-col gap-4 px-2 md:px-0">
+            <PageHeader
+                title="Action Log"
+                description="Review administrative activity and configuration changes."
+                icon={<ScrollTextIcon />}
+            >
                 <PageHeaderChangelog changelogData={configChangelog} />
             </PageHeader>
 
             <TooltipProvider delayDuration={300}>
-                <div className="bg-card flex w-full flex-1 flex-col overflow-hidden border border-border/60 shadow-sm md:rounded-xl">
+                <div className="bg-card border-border/60 relative flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl border shadow-sm">
                     <ActionLogToolbar
                         isLive={log.isLive}
                         isConnected={log.isConnected}
@@ -116,30 +120,30 @@ export default function ActionLogPage() {
                         {/* Loading older indicator */}
                         {log.isLoadingOlder && (
                             <div className="text-muted-foreground flex items-center justify-center gap-2 py-3 text-sm">
-                                <Loader2Icon className="h-4 w-4 animate-spin" />
-                                Loading older events...
+                                <Loader2Icon className="size-4 animate-spin" />
+                                Loading older events…
                             </div>
                         )}
 
                         {/* Loading session indicator */}
                         {log.isLoadingSession && (
                             <div className="text-muted-foreground flex items-center justify-center gap-2 py-8 text-sm">
-                                <Loader2Icon className="h-4 w-4 animate-spin" />
-                                Loading session...
+                                <Loader2Icon className="size-4 animate-spin" />
+                                Loading session…
                             </div>
                         )}
 
                         {/* No older data indicator */}
                         {!log.hasOlderData && (
-                            <div className="text-muted-foreground py-2 text-center text-xs">— Beginning of log —</div>
+                            <div className="text-muted-foreground py-2 text-center text-xs">Beginning of log</div>
                         )}
 
                         {/* Log entries */}
                         {log.events.length > 0 ? (
                             <div className="divide-border/50 divide-y">
-                                {log.events.map((event, idx) => (
+                                {log.events.map((event) => (
                                     <ActionLogEntry
-                                        key={`${event.ts}-${event.category}-${idx}`}
+                                        key={event.actionId ?? `${event.ts}-${event.category}-${event.author}-${event.action}`}
                                         event={event}
                                         onAdminClick={handleAdminClick}
                                     />
@@ -162,7 +166,7 @@ export default function ActionLogPage() {
                             </div>
                         ) : (
                             <div className="text-muted-foreground flex items-center justify-center py-16 text-sm">
-                                {log.isConnected ? 'Waiting for events...' : 'Connecting...'}
+                                {log.isConnected ? 'Waiting for events…' : 'Connecting…'}
                             </div>
                         )}
 
@@ -176,10 +180,10 @@ export default function ActionLogPage() {
                             <Button
                                 variant="secondary"
                                 size="icon"
-                                className="h-8 w-8 rounded-full shadow-lg"
+                                className="size-8 rounded-full shadow-lg"
                                 onClick={scrollToBottom}
                             >
-                                <ArrowDownIcon className="h-4 w-4" />
+                                <ArrowDownIcon className="size-4" />
                             </Button>
                         </div>
                     )}

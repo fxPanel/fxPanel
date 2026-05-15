@@ -1,22 +1,150 @@
 const modulename = 'AddonProcess';
 import { fork, ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { Worker } from 'node:worker_threads';
 import consoleFactory from '@lib/console';
+import { getFxChildNodeRuntimeResolution } from '@lib/resolveFxChildNode';
+import { txEnv } from '@core/globalData';
 import { AddonStorageScope } from './addonStorage';
 import { isPathInside } from './addonUtils';
 import { ServerPlayer } from '@lib/player/playerClasses';
-import type {
-    AddonState,
-    AddonRouteDescriptor,
-    CoreToAddonMessage,
-    AddonToCoreMessage,
-} from '@shared/addonTypes';
+import type { AddonState, AddonRouteDescriptor, CoreToAddonMessage, AddonToCoreMessage } from '@shared/addonTypes';
 const console = consoleFactory(modulename);
 
 const IPC_TIMEOUT_MS = 30_000;
 const STORAGE_TIMEOUT_MS = 5_000;
 const SHUTDOWN_TIMEOUT_MS = 5_000;
+
+type AddonRuntimePreference = 'auto' | 'inprocess' | 'worker' | 'node';
+
+//============================================
+// In-Process Channel
+//============================================
+//
+// On Linux/cfx-server, no separate Node binary is available and worker_threads
+// cannot be safely terminated from the host (terminate() and even worker-side
+// process.exit() can dispose a V8 isolate that the host is entered into,
+// crashing FXServer with `FATAL ERROR: v8::Isolate::Dispose() Disposing the
+// isolate that is entered by a thread`).
+//
+// To get fully live start/stop/restart on Linux we instead load the addon
+// module directly into the core's realm via dynamic import(), and replace
+// process.send/process.on('message') with a per-addon channel object handed to
+// the SDK. Stopping just closes the channel — no thread tear-down, no isolate
+// disposal, no host crash.
+//
+// Trade-off: addon authors cannot rely on full process isolation in this mode.
+// Background timers/intervals registered before stop() will keep ticking until
+// the addon module is GC-eligible (which only happens after all references to
+// its exports are dropped). This is a deliberate, documented trade-off.
+
+interface AddonInProcessChannel {
+    sendToCore(msg: AddonToCoreMessage): void;
+    onCoreMessage(fn: (msg: CoreToAddonMessage) => void): void;
+    deliverFromCore(msg: CoreToAddonMessage): void;
+    close(): void;
+    isClosed(): boolean;
+}
+
+function createInProcessChannel(opts: {
+    addonId: string;
+    onMessageFromAddon: (msg: AddonToCoreMessage) => void;
+}): AddonInProcessChannel {
+    let closed = false;
+    const addonHandlers: Array<(msg: CoreToAddonMessage) => void> = [];
+
+    return {
+        sendToCore(msg) {
+            if (closed) return;
+            try {
+                opts.onMessageFromAddon(msg);
+            } catch (err) {
+                console.error(`[addon:${opts.addonId}] in-process onMessage threw: ${(err as Error).message}`);
+            }
+        },
+        onCoreMessage(fn) {
+            if (closed) return;
+            addonHandlers.push(fn);
+        },
+        deliverFromCore(msg) {
+            if (closed) return;
+            // Snapshot to avoid mutation-during-iteration.
+            const handlers = addonHandlers.slice();
+            for (const h of handlers) {
+                try {
+                    void h(msg);
+                } catch (err) {
+                    console.error(`[addon:${opts.addonId}] addon message handler threw: ${(err as Error).message}`);
+                }
+            }
+        },
+        close() {
+            closed = true;
+            addonHandlers.length = 0;
+        },
+        isClosed() {
+            return closed;
+        },
+    };
+}
+
+// Serialize concurrent in-process loads so they don't collide on the
+// single-shot globalThis.__TX_PENDING_ADDON__ slot.
+let inProcessLoadChain: Promise<void> = Promise.resolve();
+
+let warnedNonNodeExecFallback = false;
+
+const ADDON_WORKER_BOOTSTRAP = `
+const { parentPort, workerData } = require('node:worker_threads');
+const { pathToFileURL } = require('node:url');
+const process = require('node:process');
+
+if (!parentPort) {
+    throw new Error('Addon worker started without parentPort');
+}
+
+const relay = (msg) => {
+    try {
+        parentPort.postMessage(msg);
+    } catch {
+        // Parent gone.
+    }
+};
+
+Object.defineProperty(process, 'send', {
+    value: relay,
+    configurable: true,
+    enumerable: false,
+    writable: false,
+});
+
+Object.defineProperty(process, 'connected', {
+    get: () => true,
+    configurable: true,
+});
+
+parentPort.on('message', (msg) => {
+    process.emit('message', msg);
+});
+
+(async () => {
+    try {
+        await import(pathToFileURL(workerData.entryPath).href);
+    } catch (error) {
+        relay({
+            type: 'error',
+            payload: {
+                message: error && error.message ? String(error.message) : String(error),
+                stack: error && error.stack ? String(error.stack) : undefined,
+            },
+        });
+        throw error;
+    }
+})();
+`;
 
 interface PendingRequest {
     resolve: (value: unknown) => void;
@@ -45,6 +173,10 @@ export default class AddonProcess {
     public crashCount = 0;
 
     private child: ChildProcess | null = null;
+    private worker: Worker | null = null;
+    private inProcessChannel: AddonInProcessChannel | null = null;
+    private usingWorkerFallback = false;
+    private usingInProcess = false;
     private readonly entryPath: string;
     private readonly addonDir: string;
     private readonly permissions: string[];
@@ -82,6 +214,8 @@ export default class AddonProcess {
      */
     async start(timeoutMs: number): Promise<{ success: boolean; error?: string }> {
         this.state = 'starting';
+        this.usingWorkerFallback = false;
+        this.usingInProcess = false;
         const startTime = performance.now();
 
         // Resolve entry path relative to addon dir
@@ -94,6 +228,20 @@ export default class AddonProcess {
             return { success: false, error: 'Entry path escapes addon directory' };
         }
 
+        // Determine runtime preference. On Linux we default to in-process because
+        // cfx-server hosts cannot safely spawn worker_threads or fork a Node
+        // child (no Node binary, V8 isolate disposal crashes). On other
+        // platforms we keep the historical fork-based child-process runtime.
+        const runtimePrefRaw = String(process.env.FXPANEL_ADDON_RUNTIME ?? '').trim().toLowerCase();
+        const runtimePreference: AddonRuntimePreference =
+            runtimePrefRaw === 'inprocess' || runtimePrefRaw === 'worker' || runtimePrefRaw === 'node' || runtimePrefRaw === 'auto'
+                ? (runtimePrefRaw as AddonRuntimePreference)
+                : (process.platform === 'linux' ? 'inprocess' : 'auto');
+
+        if (runtimePreference === 'inprocess') {
+            return await this.startInProcess(resolvedEntry, timeoutMs, startTime);
+        }
+
         try {
             // The addon-sdk lives at <txaPath>/node_modules/addon-sdk/
             // ESM resolution walks up the directory tree to find node_modules,
@@ -103,72 +251,187 @@ export default class AddonProcess {
             // flags that would expose the host Node process to the addon), and
             // explicitly neutralise a few foot-guns.
             //
-            // Inside FXServer's embedded Node runtime, process.execPath points to
-            // FXServer.exe rather than node. Using it as the fork executable would
-            // spawn a full FXServer instance instead of a plain Node process, causing
-            // a duplicate-core boot and config-lock conflict. Detect this and fall
-            // back to the system Node.js binary.
-            const isFxServerRuntime = /FXServer/i.test(path.basename(process.execPath));
+            // Some FXServer runtimes expose a non-Node executable as process.execPath
+            // (eg FXServer.exe on Windows, musl loader on Linux). Using it for fork()
+            // causes child boot failures (EPIPE / loader usage output). Resolve a
+            // usable Node executable path before spawning addon child processes.
+            const execBase = path.basename(process.execPath).toLowerCase();
+            const isNodeExec = execBase === 'node' || execBase === 'node.exe' || execBase.startsWith('node');
+            // Reaching here means runtimePreference !== 'inprocess'. Map remaining
+            // preferences to the legacy worker/fork selection.
+            const preferWorkerFallback = runtimePreference === 'worker';
+            const forceNodeRuntime = runtimePreference === 'node';
+            let childExecPath: string | undefined;
+            let childExecArgvPrefix: string[] = [];
+
+            if (!isNodeExec && !preferWorkerFallback) {
+                const cachedNonNodeExecResolution = getFxChildNodeRuntimeResolution();
+                childExecPath = cachedNonNodeExecResolution.childExecPath;
+                childExecArgvPrefix = [...cachedNonNodeExecResolution.childExecArgvPrefix];
+
+                if (childExecPath && childExecPath !== process.execPath) {
+                    console.verbose.warn(
+                        `${this.logPrefix} Host execPath is not a Node binary (${process.execPath}); using '${childExecPath}' for addon process`,
+                    );
+                } else if (childExecPath && childExecArgvPrefix.length) {
+                    console.verbose.warn(
+                        `${this.logPrefix} Host execPath is musl loader; using embedded Node '${childExecArgvPrefix[3]}' via loader`,
+                    );
+                } else {
+                    // No explicit Node binary found. The caller will use worker-thread fallback mode.
+                    if (!warnedNonNodeExecFallback) {
+                        warnedNonNodeExecFallback = true;
+                        console.warn(
+                            `${this.logPrefix} Could not locate explicit Node binary, using worker-thread fallback. ` +
+                            `candidates=${cachedNonNodeExecResolution.candidateCount}, sample=[${cachedNonNodeExecResolution.candidateSample.join(', ')}], cfxRoot=${cachedNonNodeExecResolution.cfxRoot}`,
+                        );
+                    }
+                }
+            }
+
+            if (preferWorkerFallback && !warnedNonNodeExecFallback) {
+                warnedNonNodeExecFallback = true;
+                console.warn(
+                    `${this.logPrefix} Using worker-thread addon runtime by default on Linux. ` +
+                    `Set FXPANEL_ADDON_RUNTIME=node (and optionally FXPANEL_ADDON_NODE_PATH) to force child-process runtime.`,
+                );
+            }
+
+            if (!isNodeExec && forceNodeRuntime && !childExecPath) {
+                this.state = 'failed';
+                return {
+                    success: false,
+                    error: 'FXPANEL_ADDON_RUNTIME=node is set, but no executable Node runtime was found. Set FXPANEL_ADDON_NODE_PATH or use FXPANEL_ADDON_RUNTIME=worker.',
+                };
+            }
+
+            const useWorkerFallback = preferWorkerFallback || (!isNodeExec && !childExecPath);
+
+            // Prefer node_modules derived from the addon's concrete path structure
+            // (<monitor>/addons/<id> -> <monitor>/node_modules). This avoids runtime
+            // drift when txaPath-derived values are wrong in some Linux setups.
+            const derivedNodeModulesDir = path.resolve(this.addonDir, '..', '..', 'node_modules');
+            const derivedSdkPath = path.join(derivedNodeModulesDir, 'addon-sdk');
+            const fallbackSdkPath = path.join(this.nodeModulesDir, 'addon-sdk');
+            const resolvedNodeModulesDir = fs.existsSync(derivedSdkPath)
+                ? derivedNodeModulesDir
+                : this.nodeModulesDir;
+
+            if (!fs.existsSync(path.join(resolvedNodeModulesDir, 'addon-sdk'))) {
+                this.state = 'failed';
+                return {
+                    success: false,
+                    error: `addon-sdk not found (checked ${derivedSdkPath} and ${fallbackSdkPath})`,
+                };
+            }
             // Whitelist of additional process.env keys to forward to addon child processes.
             // These are safe locale/timezone/terminal vars that addons may legitimately need.
             const envWhitelist = ['LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TERM'] as const;
             const whitelistedEnv = Object.fromEntries(
                 envWhitelist.flatMap((key) => (process.env[key] !== undefined ? [[key, process.env[key]]] : [])),
             );
-            this.child = fork(resolvedEntry, [], {
-                cwd: this.addonDir,
-                ...(isFxServerRuntime && { execPath: 'node' }),
-                env: {
-                    ...whitelistedEnv,
-                    PATH: process.env.PATH,
-                    HOME: process.env.HOME,
-                    NODE_ENV: process.env.NODE_ENV,
-                    ADDON_ID: this.addonId,
-                    NODE_PATH: this.nodeModulesDir,
-                },
-                execArgv: [
-                    // Throw on __proto__ writes to reduce prototype-pollution blast radius.
-                    '--disable-proto=throw',
-                ],
-                stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-                serialization: 'json',
-            });
+            const addonChildEnv = {
+                ...whitelistedEnv,
+                PATH: process.env.PATH,
+                HOME: process.env.HOME,
+                NODE_ENV: process.env.NODE_ENV,
+                ADDON_ID: this.addonId,
+                ADDON_RUNTIME: useWorkerFallback ? 'worker' : 'node',
+                NODE_PATH: resolvedNodeModulesDir,
+            };
 
-            // Capture stdout/stderr
-            this.child.stdout?.on('data', (data: Buffer) => {
-                console.log(`${this.logPrefix} ${data.toString().trimEnd()}`);
-            });
-            this.child.stderr?.on('data', (data: Buffer) => {
-                console.error(`${this.logPrefix} ${data.toString().trimEnd()}`);
-            });
+            if (useWorkerFallback) {
+                this.usingWorkerFallback = true;
+                console.warn(
+                    `${this.logPrefix} Nuclear fallback enabled: running addon in worker-thread mode (no external Node binary available).`,
+                );
 
-            // Handle IPC messages
-            this.child.on('message', (msg: AddonToCoreMessage) => {
-                this.handleMessage(msg);
-            });
+                this.worker = new Worker(ADDON_WORKER_BOOTSTRAP, {
+                    eval: true,
+                    workerData: {
+                        entryPath: resolvedEntry,
+                    },
+                    env: addonChildEnv,
+                });
 
-            // Handle unexpected exits
-            this.child.on('exit', (code, signal) => {
-                if (this.state === 'running') {
-                    console.error(`${this.logPrefix} Process crashed (code=${code}, signal=${signal})`);
-                    this.state = 'crashed';
-                    this.crashCount++;
-                    this.onCrash?.(this.addonId);
-                } else if (this.state !== 'stopped' && this.state !== 'stopping') {
-                    this.state = 'failed';
-                }
-                this.child = null;
-                this.rejectAllPending(new Error('Addon process exited'));
-            });
+                this.worker.on('message', (msg: AddonToCoreMessage) => {
+                    this.handleMessage(msg);
+                });
 
-            this.child.on('error', (err) => {
-                console.error(`${this.logPrefix} Process error: ${err.message}`);
-                if (this.state === 'starting') {
-                    this.state = 'failed';
-                }
-            });
+                this.worker.on('exit', (code) => {
+                    if (this.state === 'running') {
+                        console.error(`${this.logPrefix} Worker crashed (exitCode=${code})`);
+                        this.state = 'crashed';
+                        this.crashCount++;
+                        this.onCrash?.(this.addonId);
+                    } else if (this.state !== 'stopped' && this.state !== 'stopping') {
+                        this.state = 'failed';
+                    }
+                    this.worker = null;
+                    this.rejectAllPending(new Error('Addon worker exited'));
+                });
 
-            // Send init message
+                this.worker.on('error', (err) => {
+                    if (this.state === 'stopping') return;
+                    console.error(`${this.logPrefix} Worker error: ${err.message}`);
+                    if (this.state === 'starting') {
+                        this.state = 'failed';
+                    }
+                });
+            } else {
+                this.usingWorkerFallback = false;
+                this.child = fork(resolvedEntry, [], {
+                    cwd: this.addonDir,
+                    ...(childExecPath && { execPath: childExecPath }),
+                    env: addonChildEnv,
+                    execArgv: [
+                        ...childExecArgvPrefix,
+                        // Throw on __proto__ writes to reduce prototype-pollution blast radius.
+                        '--disable-proto=throw',
+                        // Keep symlinked addon paths intact for package resolution so imports
+                        // resolve against monitor/addons/... instead of host-realpath parents.
+                        '--preserve-symlinks',
+                        '--preserve-symlinks-main',
+                    ],
+                    stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+                    serialization: 'json',
+                });
+
+                // Capture stdout/stderr
+                this.child.stdout?.on('data', (data: Buffer) => {
+                    console.log(`${this.logPrefix} ${data.toString().trimEnd()}`);
+                });
+                this.child.stderr?.on('data', (data: Buffer) => {
+                    console.error(`${this.logPrefix} ${data.toString().trimEnd()}`);
+                });
+
+                // Handle IPC messages
+                this.child.on('message', (msg: AddonToCoreMessage) => {
+                    this.handleMessage(msg);
+                });
+
+                // Handle unexpected exits
+                this.child.on('exit', (code, signal) => {
+                    if (this.state === 'running') {
+                        console.error(`${this.logPrefix} Process crashed (code=${code}, signal=${signal})`);
+                        this.state = 'crashed';
+                        this.crashCount++;
+                        this.onCrash?.(this.addonId);
+                    } else if (this.state !== 'stopped' && this.state !== 'stopping') {
+                        this.state = 'failed';
+                    }
+                    this.child = null;
+                    this.rejectAllPending(new Error('Addon process exited'));
+                });
+
+                this.child.on('error', (err) => {
+                    console.error(`${this.logPrefix} Process error: ${err.message}`);
+                    if (this.state === 'starting') {
+                        this.state = 'failed';
+                    }
+                });
+            }
+
             this.send({
                 type: 'init',
                 payload: {
@@ -177,7 +440,6 @@ export default class AddonProcess {
                 },
             });
 
-            // Wait for ready signal
             const readyResult = await this.waitForReady(timeoutMs);
             if (!readyResult.success) {
                 await this.kill();
@@ -193,6 +455,110 @@ export default class AddonProcess {
             this.state = 'failed';
             return { success: false, error: `Failed to spawn: ${(error as Error).message}` };
         }
+    }
+
+    /**
+     * Returns true when this addon is running in the worker-thread fallback runtime.
+     */
+    isWorkerFallbackMode(): boolean {
+        return this.usingWorkerFallback;
+    }
+
+    /**
+     * Returns true when this addon is running in-process (same realm as core).
+     */
+    isInProcessMode(): boolean {
+        return this.usingInProcess;
+    }
+
+    /**
+     * Start the addon in-process: dynamic-import the entry into the core's
+     * realm and wire up a message channel that replaces process.send/on.
+     *
+     * This is the only safe runtime on cfx-server's embedded Node host:
+     * worker_threads cannot be terminated without crashing the V8 isolate, and
+     * no separate Node binary is available to fork.
+     */
+    private async startInProcess(
+        resolvedEntry: string,
+        timeoutMs: number,
+        startTime: number,
+    ): Promise<{ success: boolean; error?: string }> {
+        this.usingInProcess = true;
+
+        // Channel that bridges SDK <-> this process instance.
+        const channel = createInProcessChannel({
+            addonId: this.addonId,
+            onMessageFromAddon: (msg) => this.handleMessage(msg),
+        });
+        this.inProcessChannel = channel;
+
+        // CRITICAL: addons typically call addon.ready() synchronously during
+        // module evaluation (often before they receive 'init'). Register the
+        // ready waiter NOW, before any import/dispatch can fire.
+        const readyPromise = this.waitForReady(timeoutMs);
+
+        // Cache-bust dynamic import so reload picks up edits. ESM module cache
+        // is keyed by URL; query string forces a fresh evaluation.
+        const entryUrl = pathToFileURL(resolvedEntry).href + `?txReload=${Date.now()}-${randomUUID()}`;
+
+        // Serialize concurrent loads — globalThis.__TX_PENDING_ADDON__ is a
+        // single-shot slot consumed synchronously by createAddon().
+        const slot = '__TX_PENDING_ADDON__';
+        const myTurn = inProcessLoadChain.then(async () => {
+            (globalThis as Record<string, unknown>)[slot] = {
+                addonId: this.addonId,
+                channel,
+            };
+            try {
+                await import(entryUrl);
+            } finally {
+                const current = (globalThis as Record<string, unknown>)[slot] as
+                    | { addonId?: string }
+                    | undefined;
+                if (current && current.addonId === this.addonId) {
+                    delete (globalThis as Record<string, unknown>)[slot];
+                }
+            }
+        });
+        // Update chain before awaiting so subsequent starts queue behind us.
+        inProcessLoadChain = myTurn.catch(() => undefined);
+
+        try {
+            await myTurn;
+        } catch (error) {
+            channel.close();
+            this.inProcessChannel = null;
+            this.state = 'failed';
+            return { success: false, error: `Failed to load addon module: ${(error as Error).message}` };
+        }
+
+        // Deliver init now that the addon's handler is registered. If the
+        // addon already called ready() during evaluation, the ready message
+        // has already resolved readyPromise and this init is informational.
+        if (!channel.isClosed()) {
+            channel.deliverFromCore({
+                type: 'init',
+                payload: {
+                    addonId: this.addonId,
+                    permissions: this.permissions,
+                },
+            });
+        }
+
+        // Wait for ready signal (waiter was registered before import).
+        const readyResult = await readyPromise;
+        if (!readyResult.success) {
+            channel.close();
+            this.inProcessChannel = null;
+            this.state = 'failed';
+            return readyResult;
+        }
+
+        this.state = 'running';
+        this.startedAt = Date.now();
+        this.startupDurationMs = performance.now() - startTime;
+        return { success: true };
     }
 
     /**
@@ -231,7 +597,7 @@ export default class AddonProcess {
         path: string;
         headers: Record<string, string>;
         body: unknown;
-        admin: { name: string; permissions: string[] };
+        admin: { name: string; permissions: string[]; isMaster?: boolean };
     }): Promise<{ status: number; headers?: Record<string, string>; body: unknown }> {
         if (this.state !== 'running') {
             return { status: 503, body: { error: 'Addon is not running' } };
@@ -298,10 +664,83 @@ export default class AddonProcess {
         if (this.state === 'stopped' || this.state === 'stopping') return;
         this.state = 'stopping';
 
+        // In-process: deliver shutdown msg, close the channel, drop reference.
+        // No threads to join, no isolate to dispose. Background timers inside
+        // the addon module keep ticking until GC, but they have no way to
+        // affect us because the channel is closed.
+        if (this.inProcessChannel) {
+            const ch = this.inProcessChannel;
+            try {
+                ch.deliverFromCore({ type: 'shutdown', payload: {} });
+            } catch {
+                // Ignore — channel may already be closed.
+            }
+            ch.close();
+            this.inProcessChannel = null;
+            this.state = 'stopped';
+            this.rejectAllPending(new Error('Addon stopped'));
+            return;
+        }
+
         // If child is already dead, just clean up state
-        if (!this.child) {
+        if (!this.child && !this.worker) {
             this.state = 'stopped';
             this.rejectAllPending(new Error('Addon process already exited'));
+            return;
+        }
+
+        // Worker fallback graceful shutdown path: ask addon-sdk to exit the worker
+        // thread cleanly via process.exit(0) (thread-local in worker_threads).
+        //
+        // We DO NOT call worker.terminate() — in embedded Node runtimes such as
+        // cfx-server's, terminate() can dispose a V8 isolate that is still entered
+        // by a thread, crashing the entire host process. If the worker fails to
+        // self-exit within the timeout, we orphan it (the worker keeps running
+        // until it naturally finishes) rather than risk killing the host.
+        if (this.worker && !this.child) {
+            const activeWorker = this.worker;
+            try {
+                this.send({ type: 'shutdown', payload: {} });
+            } catch {
+                // Ignore IPC errors if worker already exited.
+            }
+
+            await new Promise<void>((resolve) => {
+                let settled = false;
+                const settle = () => {
+                    if (settled) return;
+                    settled = true;
+                    resolve();
+                };
+
+                const timer = setTimeout(() => {
+                    console.warn(
+                        `${this.logPrefix} Worker did not exit within ${SHUTDOWN_TIMEOUT_MS}ms; ` +
+                        `orphaning to avoid V8 isolate crash from terminate(). ` +
+                        `It will exit on its own when its event loop drains.`,
+                    );
+                    try { activeWorker.unref(); } catch { /* ignore */ }
+                    settle();
+                }, SHUTDOWN_TIMEOUT_MS);
+
+                activeWorker.once('exit', () => {
+                    clearTimeout(timer);
+                    settle();
+                });
+
+                activeWorker.once('error', (err) => {
+                    // Any error during shutdown means the worker is going down.
+                    if (this.state === 'stopping') {
+                        clearTimeout(timer);
+                        settle();
+                    }
+                    void err;
+                });
+            });
+
+            this.worker = null;
+            this.state = 'stopped';
+            this.rejectAllPending(new Error('Addon worker stopped'));
             return;
         }
 
@@ -325,6 +764,11 @@ export default class AddonProcess {
                     clearTimeout(timer);
                     resolve();
                 });
+            } else if (this.worker) {
+                this.worker.once('exit', () => {
+                    clearTimeout(timer);
+                    resolve();
+                });
             } else {
                 clearTimeout(timer);
                 resolve();
@@ -333,6 +777,7 @@ export default class AddonProcess {
 
         this.state = 'stopped';
         this.child = null;
+        this.worker = null;
     }
 
     /**
@@ -342,6 +787,10 @@ export default class AddonProcess {
         if (this.child) {
             this.child.kill('SIGKILL');
             this.child = null;
+        }
+        if (this.worker) {
+            await this.worker.terminate();
+            this.worker = null;
         }
     }
 
@@ -379,11 +828,14 @@ export default class AddonProcess {
                 break;
             }
             case 'storage-request': {
-                this.handleStorageRequest(msg.id, msg.payload as {
-                    op: 'get' | 'set' | 'delete' | 'list';
-                    key?: string;
-                    value?: unknown;
-                });
+                this.handleStorageRequest(
+                    msg.id,
+                    msg.payload as {
+                        op: 'get' | 'set' | 'delete' | 'list';
+                        key?: string;
+                        value?: unknown;
+                    },
+                );
                 break;
             }
             case 'ws-push': {
@@ -404,10 +856,7 @@ export default class AddonProcess {
                 break;
             }
             case 'api-call': {
-                this.handleApiCall(
-                    msg.id,
-                    msg.payload as { method: string; args: unknown[] },
-                );
+                this.handleApiCall(msg.id, msg.payload as { method: string; args: unknown[] });
                 break;
             }
             case 'error': {
@@ -491,14 +940,22 @@ export default class AddonProcess {
             switch (payload.op) {
                 case 'get':
                     if (!payload.key) {
-                        this.send({ type: 'storage-response', id, payload: { data: null, error: 'Missing key for get operation' } });
+                        this.send({
+                            type: 'storage-response',
+                            id,
+                            payload: { data: null, error: 'Missing key for get operation' },
+                        });
                         return;
                     }
                     result = this.storage.get(payload.key);
                     break;
                 case 'set': {
                     if (!payload.key) {
-                        this.send({ type: 'storage-response', id, payload: { data: null, error: 'Missing key for set operation' } });
+                        this.send({
+                            type: 'storage-response',
+                            id,
+                            payload: { data: null, error: 'Missing key for set operation' },
+                        });
                         return;
                     }
                     const setResult = this.storage.set(payload.key, payload.value);
@@ -511,7 +968,11 @@ export default class AddonProcess {
                 }
                 case 'delete':
                     if (!payload.key) {
-                        this.send({ type: 'storage-response', id, payload: { data: null, error: 'Missing key for delete operation' } });
+                        this.send({
+                            type: 'storage-response',
+                            id,
+                            payload: { data: null, error: 'Missing key for delete operation' },
+                        });
                         return;
                     }
                     this.storage.delete(payload.key);
@@ -559,12 +1020,21 @@ export default class AddonProcess {
     }
 
     /**
-     * Send a raw IPC message to the child process.
+     * Send a raw IPC message to the child process / worker / in-process channel.
      */
     private send(message: CoreToAddonMessage): void {
-        if (!this.child || !this.child.connected) return;
         try {
-            this.child.send(message);
+            if (this.inProcessChannel) {
+                this.inProcessChannel.deliverFromCore(message);
+                return;
+            }
+            if (this.child && this.child.connected) {
+                this.child.send(message);
+                return;
+            }
+            if (this.worker) {
+                this.worker.postMessage(message);
+            }
         } catch (error) {
             console.error(`${this.logPrefix} Failed to send IPC message: ${(error as Error).message}`);
         }

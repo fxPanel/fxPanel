@@ -3,58 +3,109 @@ import { CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from 
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { ApiAddMasterPinReq, ApiAddMasterPinResp } from '@shared/authApiTypes';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer } from 'react';
 import { Loader2 } from 'lucide-react';
 import { LogoutReasonHash } from './Login';
 import { fetchWithTimeout } from '@/hooks/fetch';
 import { AuthError, processFetchError, type AuthErrorData } from './errors';
 
-export default function AddMasterPin() {
-    const pinRef = useRef<HTMLInputElement>(null);
-    const [isRedirecting, setIsRedirecting] = useState(false);
-    const [messageText, setMessageText] = useState<string | undefined>();
-    const [isMessageError, setIsMessageError] = useState<boolean>(false);
-    const [isFetching, setIsFetching] = useState(false);
-    const [fullPageError, setFullPageError] = useState<AuthErrorData | undefined>();
+type AddMasterPinState = {
+    pin: string;
+    isRedirecting: boolean;
+    messageText: string | undefined;
+    isMessageError: boolean;
+    isFetching: boolean;
+    fullPageError: AuthErrorData | undefined;
+};
 
-    const submitPin = async () => {
+function reduceAddMasterPinState(state: AddMasterPinState, action: Partial<AddMasterPinState>): AddMasterPinState {
+    return {
+        ...state,
+        ...action,
+    };
+}
+
+const getSafeRedirectPath = (value: string) => {
+    try {
+        const parsed = new URL(value, window.location.origin);
+        if (parsed.origin !== window.location.origin) return null;
+        if (!parsed.pathname.startsWith('/')) return null;
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch {
+        return null;
+    }
+};
+
+export default function AddMasterPin() {
+    const [state, dispatch] = useReducer(reduceAddMasterPinState, {
+        pin: '',
+        isRedirecting: false,
+        messageText: undefined,
+        isMessageError: false,
+        isFetching: false,
+        fullPageError: undefined,
+    });
+    const { pin, isRedirecting, messageText, isMessageError, isFetching, fullPageError } = state;
+
+    const submitPin = async (pinOverride?: string) => {
         try {
-            setIsMessageError(false);
-            setMessageText(undefined);
-            setIsFetching(true);
+            dispatch({
+                isMessageError: false,
+                messageText: undefined,
+                isFetching: true,
+            });
             const data = await fetchWithTimeout<ApiAddMasterPinResp, ApiAddMasterPinReq>(`/auth/addMaster/pin`, {
                 method: 'POST',
                 body: {
-                    pin: pinRef.current?.value || '000000',
+                    pin: (pinOverride ?? pin) || '000000',
                     origin: window.location.origin,
                 },
             });
             if ('error' in data) {
                 if (data.error === 'master_already_set') {
-                    setIsRedirecting(true);
-                    setFullPageError({ errorCode: data.error });
+                    dispatch({
+                        isRedirecting: true,
+                        fullPageError: { errorCode: data.error },
+                    });
                 } else {
-                    setIsMessageError(true);
-                    setMessageText(data.error);
+                    dispatch({ isMessageError: true, messageText: data.error });
                 }
             } else {
-                setIsRedirecting(true);
-                console.log('Redirecting to', data.authUrl);
-                window.location.href = data.authUrl;
+                dispatch({ isRedirecting: true });
+                const safeRedirectPath = getSafeRedirectPath(data.authUrl);
+                if (!safeRedirectPath) {
+                    dispatch({
+                        isRedirecting: false,
+                        isMessageError: true,
+                        messageText: 'Invalid redirect URL.',
+                    });
+                    return;
+                }
+                console.log('Redirecting to', safeRedirectPath);
+                window.location.assign(safeRedirectPath);
             }
         } catch (error) {
-            setIsMessageError(true);
             const { errorTitle, errorMessage } = processFetchError(error);
-            setMessageText(`${errorTitle}: ${errorMessage}`);
+            dispatch({
+                isMessageError: true,
+                messageText: `${errorTitle}: ${errorMessage}`,
+            });
         } finally {
-            setIsFetching(false);
+            dispatch({ isFetching: false });
         }
+    };
+
+    const handleSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
+        event?.preventDefault();
+        submitPin();
     };
 
     useEffect(() => {
         if (/^#\d{6}$/.test(window.location.hash)) {
-            setMessageText('Auto-filled ✔');
-            pinRef.current!.value = window.location.hash.substring(1);
+            dispatch({
+                messageText: 'Auto-filled ✔',
+                pin: window.location.hash.substring(1),
+            });
         }
     }, []);
 
@@ -64,13 +115,7 @@ export default function AddMasterPin() {
 
     const disableInput = isFetching || isRedirecting;
     return (
-        <form
-            onSubmit={(e) => {
-                e?.preventDefault();
-                submitPin();
-            }}
-            className="w-full"
-        >
+        <form onSubmit={handleSubmit} className="w-full">
             <CardHeader className="space-y-1">
                 <CardTitle className="text-3xl">No Cfx.re account linked</CardTitle>
                 <CardDescription className="text-muted-foreground text-base">
@@ -93,23 +138,20 @@ export default function AddMasterPin() {
                     type="text"
                     inputMode="numeric"
                     pattern="\d{6}"
-                    ref={pinRef}
                     minLength={6}
                     maxLength={6}
                     placeholder="000000"
                     autoComplete="off"
+                    value={pin}
                     onFocus={(e) => {
-                        setIsMessageError(false);
-                        setMessageText(undefined);
+                        dispatch({ isMessageError: false, messageText: undefined });
                         e.target?.select();
                     }}
                     onChange={(e) => {
                         const digitsOnly = e.target.value.replace(/\D/g, '');
-                        if (digitsOnly !== e.target.value) {
-                            e.target.value = digitsOnly;
-                        }
+                        dispatch({ pin: digitsOnly });
                         if (digitsOnly.length === 6) {
-                            submitPin();
+                            submitPin(digitsOnly);
                         }
                     }}
                     disabled={disableInput}
@@ -118,7 +160,7 @@ export default function AddMasterPin() {
             </CardContent>
             <CardFooter>
                 <Button className="w-full" disabled={disableInput}>
-                    {disableInput && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {disableInput && <Loader2 className="mr-2 size-4 animate-spin" />}
                     Link Account
                 </Button>
             </CardFooter>

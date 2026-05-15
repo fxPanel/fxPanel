@@ -43,6 +43,13 @@ import { getSocket, joinSocketRoom, leaveSocketRoom } from '@/lib/utils';
 
 type StatusFilter = 'all' | 'started' | 'stopped';
 
+type ResourcesViewState = {
+    searchQuery: string;
+    statusFilter: StatusFilter;
+    expandedFolders: Set<string>;
+    selectedFolder: string | null;
+};
+
 // Merge WebSocket updates into the SWR data
 function mergeWsUpdate(
     data: Exclude<ResourcesListResp, { error: string }> | undefined,
@@ -65,14 +72,21 @@ function mergeWsUpdate(
 }
 
 export default function ResourcesPage() {
-    const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-    const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
-    const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+    const [viewState, setViewState] = useState<ResourcesViewState>({
+        searchQuery: '',
+        statusFilter: 'all',
+        expandedFolders: new Set(),
+        selectedFolder: null,
+    });
     const wsDataRef = useRef<Map<string, ResourceStatusEvent>>(new Map());
     const [wsRevision, setWsRevision] = useState(0);
+    const { searchQuery, statusFilter, expandedFolders, selectedFolder } = viewState;
     const { hasPerm } = useAdminPerms();
     const canControl = hasPerm('commands.resources');
+
+    const setViewField = <K extends keyof ResourcesViewState>(key: K, value: ResourcesViewState[K]) => {
+        setViewState((prev) => ({ ...prev, [key]: value }));
+    };
 
     const listApi = useBackendApi<ResourcesListResp>({
         method: 'GET',
@@ -156,14 +170,14 @@ export default function ResourcesPage() {
     }, [commandApi, swr]);
 
     const toggleFolder = useCallback((folderPath: string) => {
-        setExpandedFolders((prev) => {
-            const next = new Set(prev);
-            if (next.has(folderPath)) {
-                next.delete(folderPath);
+        setViewState((prev) => {
+            const nextExpandedFolders = new Set(prev.expandedFolders);
+            if (nextExpandedFolders.has(folderPath)) {
+                nextExpandedFolders.delete(folderPath);
             } else {
-                next.add(folderPath);
+                nextExpandedFolders.add(folderPath);
             }
-            return next;
+            return { ...prev, expandedFolders: nextExpandedFolders };
         });
     }, []);
 
@@ -176,8 +190,7 @@ export default function ResourcesPage() {
             groups = groups.filter((g) => g.subPath === selectedFolder);
         }
 
-        return groups
-            .map((group) => {
+        return groups.flatMap((group) => {
                 let resources = group.resources;
 
                 if (statusFilter !== 'all') {
@@ -194,9 +207,8 @@ export default function ResourcesPage() {
                     );
                 }
 
-                return { ...group, resources };
-            })
-            .filter((group) => group.resources.length > 0);
+                return resources.length > 0 ? [{ ...group, resources }] : [];
+            });
     }, [liveData, searchQuery, statusFilter, selectedFolder]);
 
     // Expand all folders that have matching resources when searching
@@ -219,7 +231,7 @@ export default function ResourcesPage() {
                     <ScrollArea className="flex-1">
                         <div className="p-2">
                             <button
-                                onClick={() => setSelectedFolder(null)}
+                                onClick={() => setViewField('selectedFolder', null)}
                                 className={`text-muted-foreground hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
                                     selectedFolder === null ? 'bg-accent text-accent-foreground font-medium' : ''
                                 }`}
@@ -236,7 +248,10 @@ export default function ResourcesPage() {
                                 <button
                                     key={group.subPath}
                                     onClick={() =>
-                                        setSelectedFolder(selectedFolder === group.subPath ? null : group.subPath)
+                                        setViewField(
+                                            'selectedFolder',
+                                            selectedFolder === group.subPath ? null : group.subPath,
+                                        )
                                     }
                                     className={`text-muted-foreground hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
                                         selectedFolder === group.subPath
@@ -264,14 +279,14 @@ export default function ResourcesPage() {
                             <Input
                                 placeholder="Search resources..."
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={(e) => setViewField('searchQuery', e.target.value)}
                                 className="pl-9"
                             />
                         </div>
                         <div className="flex items-center gap-2">
                             <FilterButtons
                                 statusFilter={statusFilter}
-                                onFilterChange={setStatusFilter}
+                                onFilterChange={(value) => setViewField('statusFilter', value)}
                                 data={liveData}
                             />
                             {canControl && (

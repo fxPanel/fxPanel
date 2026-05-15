@@ -7,8 +7,8 @@ import { useAdminPerms } from '@/hooks/auth';
 import { useLiveConsoleHistory } from '@/pages/LiveConsole/liveConsoleHooks';
 import { useAtomValue } from 'jotai';
 import { fxRunnerStateAtom } from '@/hooks/status';
-import LiveConsoleOptionsDropdown from './LiveConsoleOptionsDropdown';
-import type { LiveConsoleOptions } from './LiveConsolePage';
+import LiveConsoleOptionsDropdown from '@/pages/LiveConsole/LiveConsoleOptionsDropdown';
+import type { LiveConsoleOptions } from '@/pages/LiveConsole/LiveConsolePage';
 
 type ConsoleFooterButtonProps = {
     icon: React.ElementType;
@@ -21,6 +21,8 @@ function ConsoleFooterButton({ icon: Icon, title, disabled, onClick }: ConsoleFo
     return (
         <div
             tabIndex={0}
+            role="button"
+            aria-disabled={disabled ? true : undefined}
             className={cn(
                 `group bg-secondary xs:bg-transparent 2xl:hover:bg-secondary ring-offset-background focus-visible:ring-ring flex w-full cursor-pointer items-center justify-center rounded-lg px-1.5 py-2 transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden`,
                 disabled && 'pointer-events-none opacity-50',
@@ -28,7 +30,7 @@ function ConsoleFooterButton({ icon: Icon, title, disabled, onClick }: ConsoleFo
             onClick={() => !disabled && onClick()}
             onKeyDown={(e) => (e.code === 'Enter' || e.code === 'Space') && !disabled && onClick()}
         >
-            <Icon className="text-muted-foreground group-hover:text-secondary-foreground inline h-6 w-6 group-hover:scale-110 2xl:h-5 2xl:w-5" />
+            <Icon className="text-muted-foreground group-hover:text-secondary-foreground inline size-6 group-hover:scale-110 2xl:h-5 2xl:w-5" />
             <span className="ml-1 hidden align-middle 2xl:inline">{title}</span>
         </div>
     );
@@ -40,7 +42,7 @@ type LiveConsoleFooterProps = {
     consoleClear: () => void;
     toggleSaveSheet: () => void;
     toggleSearchBar: () => void;
-    termInputRef: React.RefObject<HTMLInputElement>;
+    termInputRef: React.RefObject<HTMLInputElement | null>;
     consoleOptions: LiveConsoleOptions;
     onOptionsChange: (options: LiveConsoleOptions) => void;
 };
@@ -124,7 +126,7 @@ export default function LiveConsoleFooter(props: LiveConsoleFooterProps) {
         <div className="xs:flex-row xs:items-center flex flex-col justify-center gap-2 border-t px-1 py-2 sm:px-4">
             <div className="flex grow items-center">
                 <svg
-                    className="text-warning-inline mr-2 hidden h-4 w-4 shrink-0 sm:block"
+                    className="text-warning-inline mr-2 hidden size-4 shrink-0 sm:block"
                     fill="none"
                     height="24"
                     stroke="currentColor"
@@ -147,6 +149,7 @@ export default function LiveConsoleFooter(props: LiveConsoleFooterProps) {
                     autoCapitalize="none"
                     autoComplete="off"
                     autoCorrect="off"
+                    aria-label={inputError ? `Console input disabled: ${inputError}` : 'Server console command input'}
                 />
             </div>
             <div className="flex flex-row justify-evenly gap-3 select-none 2xl:gap-1">

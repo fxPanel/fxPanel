@@ -15,6 +15,13 @@
     "server": {
         "entry": "server/index.js"
     },
+    "discordBot": {
+        "commands": "discord-bot/commands",
+        "rateLimit": {
+            "max": 5,
+            "windowMs": 15000
+        }
+    },
     "panel": {
         "entry": "panel/index.js",
         "pages": [

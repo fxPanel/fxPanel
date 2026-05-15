@@ -170,13 +170,23 @@ suite('AuthedAdmin', () => {
         it('should call logger.system.write for actions', () => {
             const authed = new AuthedAdmin(storedAdmin, 'csrf');
             authed.logAction('banned player');
-            expect(txCore.logger.system.write).toHaveBeenCalledWith('testadmin', 'banned player', 'action');
+            expect(txCore.logger.system.write).toHaveBeenCalledWith(
+                'testadmin',
+                'banned player',
+                'action',
+                expect.objectContaining({ actionId: undefined }),
+            );
         });
 
         it('should call logger.system.write for commands', () => {
             const authed = new AuthedAdmin(storedAdmin, 'csrf');
             authed.logCommand('restart server');
-            expect(txCore.logger.system.write).toHaveBeenCalledWith('testadmin', 'restart server', 'command');
+            expect(txCore.logger.system.write).toHaveBeenCalledWith(
+                'testadmin',
+                'restart server',
+                'command',
+                expect.objectContaining({ actionId: undefined }),
+            );
         });
     });
 

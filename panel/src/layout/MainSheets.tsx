@@ -1,9 +1,8 @@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { useGlobalMenuSheet, usePlayerlistSheet, useServerSheet } from '@/hooks/sheets';
+import { useGlobalMenuSheet, usePlayerlistSheet } from '@/hooks/sheets';
 import { NavLink } from '@/components/MainPageLink';
 import { PlayerlistSidebar } from './PlayerlistSidebar/PlayerlistSidebar';
-import { ServerSidebar } from './ServerSidebar/ServerSidebar';
 import { LogoFullSquareGreen } from '@/components/Logos';
 import { useSwipeGestures } from '@/hooks/useSwipeGestures';
 import { SidebarNavContent, ServerStatusCard, SidebarUserButton, SidebarCollapsedCtx } from './LeftSidebar';
@@ -12,14 +11,14 @@ import { SidebarNavContent, ServerStatusCard, SidebarUserButton, SidebarCollapse
  * Mobile global menu — mirrors the desktop LeftSidebar (sectioned navigation,
  * server status card, account button) inside a slide-out sheet.
  */
-export function GlobalMenuSheet() {
+function GlobalMenuSheet() {
     const { isSheetOpen, setIsSheetOpen } = useGlobalMenuSheet();
 
     return (
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
             <SheetContent
                 side="left"
-                className="xs:w-80 bg-[#0c0e16] flex w-full flex-col gap-0 border-border/40 p-0 select-none"
+                className="xs:w-80 border-border/40 flex w-full flex-col gap-0 bg-[#0c0e16] p-0 select-none"
                 onOpenAutoFocus={(e) => e.preventDefault()}
             >
                 <SidebarCollapsedCtx.Provider value={false}>
@@ -52,24 +51,7 @@ export function GlobalMenuSheet() {
     );
 }
 
-/**
- * Legacy server-specific sheet — kept for any code paths that still open it,
- * but the mobile header no longer surfaces a button for it.
- */
-export function ServerSidebarSheet() {
-    const { isSheetOpen, setIsSheetOpen } = useServerSheet();
-    return (
-        <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-            <SheetContent side="left" className="xs:w-3/4 w-full p-0" onOpenAutoFocus={(e) => e.preventDefault()}>
-                <ScrollArea className="h-full">
-                    <ServerSidebar isSheet />
-                </ScrollArea>
-            </SheetContent>
-        </Sheet>
-    );
-}
-
-export function PlayersSidebarSheet() {
+function PlayersSidebarSheet() {
     const { isSheetOpen, setIsSheetOpen } = usePlayerlistSheet();
     return (
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
@@ -87,7 +69,6 @@ export default function MainSheets() {
     return (
         <>
             <GlobalMenuSheet />
-            <ServerSidebarSheet />
             <PlayersSidebarSheet />
         </>
     );

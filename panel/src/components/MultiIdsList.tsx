@@ -28,6 +28,7 @@ export default function MultiIdsList({ list, highlighted, type, src, onWipeIds }
     const [autoAnimateParentRef, enableAnimations] = useAutoAnimate();
     const divRef = useRef<HTMLDivElement>(null);
     const msgRef = useRef<HTMLSpanElement>(null);
+    const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [compareMatches, setCompareMatches] = useState<string[] | null>(null);
     const [actionFeedback, setActionFeedback] = useState<ActionFeedback | false>(false);
 
@@ -50,16 +51,23 @@ export default function MultiIdsList({ list, highlighted, type, src, onWipeIds }
     const isCompareIdMatch = (id: string) => isInCompareMode && compareMatches.includes(id);
 
     useEffect(() => {
-        if (actionFeedback) {
-            const timer = setTimeout(() => {
-                setActionFeedback(false);
-            }, 2750);
-
-            return () => {
-                clearTimeout(timer);
+        return () => {
+            if (feedbackTimeoutRef.current) {
+                clearTimeout(feedbackTimeoutRef.current);
             };
+        };
+    }, []);
+
+    const showActionFeedback = (feedback: ActionFeedback) => {
+        setActionFeedback(feedback);
+        if (feedbackTimeoutRef.current) {
+            clearTimeout(feedbackTimeoutRef.current);
         }
-    }, [actionFeedback]);
+        feedbackTimeoutRef.current = setTimeout(() => {
+            setActionFeedback(false);
+            feedbackTimeoutRef.current = null;
+        }, 2750);
+    };
 
     const handleWipeIds = () => {
         if (!onWipeIds) return;
@@ -91,11 +99,13 @@ export default function MultiIdsList({ list, highlighted, type, src, onWipeIds }
             isMultiline: true,
             isWide: true,
             onSubmit: (input) => {
-                const cleanIds = input
-                    .split(/[\n\s,;]+/)
-                    .map((id) => id.trim())
-                    .filter((id) => id.length)
-                    .filter((id) => id.length && list.includes(id));
+                const cleanIds = input.split(/[\n\s,;]+/).reduce<string[]>((ids, rawId) => {
+                    const id = rawId.trim();
+                    if (id.length && list.includes(id)) {
+                        ids.push(id);
+                    }
+                    return ids;
+                }, []);
                 setCompareMatches(cleanIds);
             },
         });
@@ -112,7 +122,7 @@ export default function MultiIdsList({ list, highlighted, type, src, onWipeIds }
         copyToClipboard(strToCopy, divRef.current)
             .then((res) => {
                 if (res !== false) {
-                    setActionFeedback({
+                    showActionFeedback({
                         msg: 'Copied!',
                         success: true,
                     });
@@ -125,7 +135,7 @@ export default function MultiIdsList({ list, highlighted, type, src, onWipeIds }
                     title: 'Failed to copy to clipboard:',
                     msg: error.message,
                 });
-                setActionFeedback({
+                showActionFeedback({
                     msg: 'Error :(',
                     success: false,
                 });
@@ -222,7 +232,7 @@ export default function MultiIdsList({ list, highlighted, type, src, onWipeIds }
                             className="ring-offset-background absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100"
                             onClick={() => setCompareMatches(null)}
                         >
-                            <XIcon className="h-8 w-8 sm:h-6 sm:w-6" />
+                            <XIcon className="size-8 sm:h-6 sm:w-6" />
                             <span className="sr-only">Close</span>
                         </button>
                     </>

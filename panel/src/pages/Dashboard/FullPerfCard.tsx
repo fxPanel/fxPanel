@@ -1,5 +1,5 @@
 import { LineChartIcon, Loader2Icon, UsersIcon, CpuIcon, MemoryStickIcon } from 'lucide-react';
-import React, { ReactNode, memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { ReactNode, memo, useEffect, useMemo, useReducer, useRef } from 'react';
 import DebouncedResizeContainer from '@/components/DebouncedResizeContainer';
 import drawFullPerfChart from './drawFullPerfChart';
 import { useBackendApi } from '@/hooks/fetch';
@@ -21,6 +21,7 @@ import { useSetAtom } from 'jotai';
 import { cn } from '@/lib/utils';
 import { emsg } from '@shared/emsg';
 import { createMockPerfChartApiData } from './devMockData';
+import { isDevMockStatusOptInEnabled } from '@/lib/devFlags';
 
 type FullPerfChartProps = {
     threadName: SvRtPerfThreadNamesType;
@@ -33,6 +34,85 @@ type FullPerfChartProps = {
     showFxsMemory: boolean;
     showNodeMemory: boolean;
 };
+
+type FullPerfChartRenderState = {
+    renderError: string;
+    errorRetry: number;
+};
+
+type FullPerfChartRenderAction =
+    | { type: 'drawSuccess' }
+    | { type: 'drawError'; error: string }
+    | { type: 'retry' };
+
+function reduceFullPerfChartRenderState(
+    state: FullPerfChartRenderState,
+    action: FullPerfChartRenderAction,
+): FullPerfChartRenderState {
+    switch (action.type) {
+        case 'drawSuccess':
+            return {
+                ...state,
+                renderError: '',
+                errorRetry: 0,
+            };
+        case 'drawError':
+            return {
+                ...state,
+                renderError: action.error,
+            };
+        case 'retry':
+            return {
+                renderError: '',
+                errorRetry: state.errorRetry + 1,
+            };
+        default:
+            return state;
+    }
+}
+
+type FullPerfCardState = {
+    chartSize: { width: number; height: number };
+    selectedThread: SvRtPerfThreadNamesType;
+    apiFailReason: string;
+    apiDataAge: number;
+    showPlayerCount: boolean;
+    showFxsMemory: boolean;
+    showNodeMemory: boolean;
+};
+
+type FullPerfCardAction =
+    | { type: 'patch'; patch: Partial<FullPerfCardState> }
+    | { type: 'togglePlayerCount' }
+    | { type: 'toggleFxsMemory' }
+    | { type: 'toggleNodeMemory' };
+
+function reduceFullPerfCardState(state: FullPerfCardState, action: FullPerfCardAction): FullPerfCardState {
+    switch (action.type) {
+        case 'patch':
+            return {
+                ...state,
+                ...action.patch,
+            };
+        case 'togglePlayerCount':
+            return {
+                ...state,
+                showPlayerCount: !state.showPlayerCount,
+            };
+        case 'toggleFxsMemory':
+            return {
+                ...state,
+                showFxsMemory: !state.showFxsMemory,
+            };
+        case 'toggleNodeMemory':
+            return {
+                ...state,
+                showNodeMemory: !state.showNodeMemory,
+            };
+        default:
+            return state;
+    }
+}
 
 const FullPerfChart = memo(
     ({
@@ -49,8 +129,11 @@ const FullPerfChart = memo(
         const setServerStats = useSetAtom(dashServerStatsAtom);
         const svgRef = useRef<SVGSVGElement>(null);
         const canvasRef = useRef<HTMLCanvasElement>(null);
-        const [renderError, setRenderError] = useState('');
-        const [errorRetry, setErrorRetry] = useState(0);
+        const [renderState, dispatchRender] = useReducer(reduceFullPerfChartRenderState, {
+            renderError: '',
+            errorRetry: 0,
+        });
+        const { renderError, errorRetry } = renderState;
         const setCursor = useThrottledSetCursor();
         const margins = {
             top: 8,
@@ -102,7 +185,7 @@ const FullPerfChart = memo(
                 drawFullPerfChart({
                     svgRef: svgRef.current,
                     canvasRef: canvasRef.current,
-                    setRenderError,
+                    setRenderError: (error) => dispatchRender({ type: 'drawError', error }),
                     size: { width, height },
                     margins,
                     isDarkMode,
@@ -111,11 +194,10 @@ const FullPerfChart = memo(
                     showNodeMemory,
                     ...processedData,
                 });
-                setErrorRetry(0);
-                setRenderError('');
+                dispatchRender({ type: 'drawSuccess' });
                 console.timeEnd('drawFullPerfChart');
             } catch (error) {
-                setRenderError(emsg(error) ?? 'Unknown error.');
+                dispatchRender({ type: 'drawError', error: emsg(error) ?? 'Unknown error.' });
             } finally {
                 console.groupEnd();
             }
@@ -129,6 +211,7 @@ const FullPerfChart = memo(
             showPlayerCount,
             showFxsMemory,
             showNodeMemory,
+            errorRetry,
         ]);
 
         if (!width || !height) return null;
@@ -141,10 +224,7 @@ const FullPerfChart = memo(
                         size={'sm'}
                         variant={'outline'}
                         className="text-primary"
-                        onClick={() => {
-                            setErrorRetry((c) => c + 1);
-                            setRenderError('');
-                        }}
+                        onClick={() => dispatchRender({ type: 'retry' })}
                     >
                         Retry{errorRetry ? ` (${errorRetry})` : ''}
                     </Button>
@@ -212,13 +292,17 @@ function ChartErrorMessage({ error }: { error: Error | string }) {
 }
 
 export default function FullPerfCard() {
-    const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
-    const [selectedThread, setSelectedThread] = useState<SvRtPerfThreadNamesType>('svMain');
-    const [apiFailReason, setApiFailReason] = useState('');
-    const [apiDataAge, setApiDataAge] = useState(0);
-    const [showPlayerCount, setShowPlayerCount] = useState(true);
-    const [showFxsMemory, setShowFxsMemory] = useState(false);
-    const [showNodeMemory, setShowNodeMemory] = useState(false);
+    const [state, dispatch] = useReducer(reduceFullPerfCardState, {
+        chartSize: { width: 0, height: 0 },
+        selectedThread: 'svMain',
+        apiFailReason: '',
+        apiDataAge: 0,
+        showPlayerCount: true,
+        showFxsMemory: false,
+        showNodeMemory: false,
+    });
+    const { chartSize, selectedThread, apiFailReason, apiDataAge, showPlayerCount, showFxsMemory, showNodeMemory } =
+        state;
     const isDarkMode = useIsDarkMode();
 
     const chartApi = useBackendApi<PerfChartApiResp>({
@@ -229,10 +313,11 @@ export default function FullPerfCard() {
     const swrChartApiResp = useSWR(
         `/perfChartData/${selectedThread}`,
         async () => {
-            setApiFailReason('');
+            dispatch({ type: 'patch', patch: { apiFailReason: '' } });
 
-            if (import.meta.env.DEV) {
-                setApiDataAge(Date.now());
+            const isDevMockMode = import.meta.env.DEV && isDevMockStatusOptInEnabled();
+            if (isDevMockMode) {
+                dispatch({ type: 'patch', patch: { apiDataAge: Date.now() } });
                 return createMockPerfChartApiData(selectedThread);
             }
 
@@ -241,10 +326,10 @@ export default function FullPerfCard() {
             });
             if (!data) throw new Error('empty_response');
             if ('fail_reason' in data) {
-                setApiFailReason(data.fail_reason);
+                dispatch({ type: 'patch', patch: { apiFailReason: data.fail_reason } });
                 return null;
             }
-            setApiDataAge(Date.now());
+            dispatch({ type: 'patch', patch: { apiDataAge: Date.now() } });
             return data;
         },
         {
@@ -255,36 +340,12 @@ export default function FullPerfCard() {
         },
     );
 
-    //Rendering
-    let contentNode: React.ReactNode = null;
-    if (swrChartApiResp.data) {
-        contentNode = (
-            <FullPerfChart
-                threadName={selectedThread}
-                apiData={swrChartApiResp.data as PerfChartApiSuccessResp}
-                apiDataAge={apiDataAge}
-                width={chartSize.width}
-                height={chartSize.height}
-                isDarkMode={isDarkMode}
-                showPlayerCount={showPlayerCount}
-                showFxsMemory={showFxsMemory}
-                showNodeMemory={showNodeMemory}
-            />
-        );
-    } else if (swrChartApiResp.isLoading) {
-        contentNode = (
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <Loader2Icon className="text-muted-foreground size-16 animate-spin" />
-            </div>
-        );
-    } else if (apiFailReason || swrChartApiResp.error) {
-        contentNode = <ChartErrorMessage error={apiFailReason || swrChartApiResp.error} />;
-    }
-
     return (
-        <div className="bg-card fill-primary flex min-h-112 w-full flex-1 flex-col rounded-xl border border-border/60 pt-2 shadow-sm">
-            <div className="flex flex-row items-center justify-between space-y-0 px-4 pb-2">
-                <h3 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Server Performance</h3>
+        <div className="bg-card fill-primary border-border/60 flex min-h-112 w-full flex-1 flex-col rounded-xl border pt-2 shadow-sm">
+            <div className="flex flex-row items-center justify-between gap-y-0 px-4 pb-2">
+                <h3 className="text-muted-foreground/50 text-[10px] font-semibold tracking-widest uppercase">
+                    Server Performance
+                </h3>
                 <div className="flex items-center gap-2">
                     <Button
                         variant="ghost"
@@ -293,7 +354,7 @@ export default function FullPerfCard() {
                             'h-6 gap-1 px-2 text-xs',
                             showPlayerCount ? 'text-foreground' : 'text-muted-foreground opacity-50',
                         )}
-                        onClick={() => setShowPlayerCount((p) => !p)}
+                        onClick={() => dispatch({ type: 'togglePlayerCount' })}
                         title="Toggle player count"
                     >
                         <UsersIcon className="size-3" />
@@ -306,7 +367,7 @@ export default function FullPerfCard() {
                             'h-6 gap-1 px-2 text-xs',
                             showFxsMemory ? 'text-foreground' : 'text-muted-foreground opacity-50',
                         )}
-                        onClick={() => setShowFxsMemory((p) => !p)}
+                        onClick={() => dispatch({ type: 'toggleFxsMemory' })}
                         title="Toggle FXServer memory"
                     >
                         <CpuIcon className="size-3" />
@@ -319,7 +380,7 @@ export default function FullPerfCard() {
                             'h-6 gap-1 px-2 text-xs',
                             showNodeMemory ? 'text-foreground' : 'text-muted-foreground opacity-50',
                         )}
-                        onClick={() => setShowNodeMemory((p) => !p)}
+                        onClick={() => dispatch({ type: 'toggleNodeMemory' })}
                         title="Toggle Node.js memory"
                     >
                         <MemoryStickIcon className="size-3" />
@@ -327,7 +388,9 @@ export default function FullPerfCard() {
                     </Button>
                     <Select
                         value={selectedThread}
-                        onValueChange={(value) => setSelectedThread(value as SvRtPerfThreadNamesType)}
+                        onValueChange={(value) =>
+                            dispatch({ type: 'patch', patch: { selectedThread: value as SvRtPerfThreadNamesType } })
+                        }
                     >
                         <SelectTrigger className="h-6 w-32 grow px-3 py-1 text-sm md:grow-0">
                             <SelectValue placeholder="Select thread" />
@@ -344,10 +407,32 @@ export default function FullPerfCard() {
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <LineChartIcon className="h-3.5 w-3.5 text-muted-foreground/30" />
+                    <LineChartIcon className="text-muted-foreground/30 size-3.5" />
                 </div>
             </div>
-            <DebouncedResizeContainer onDebouncedResize={setChartSize}>{contentNode}</DebouncedResizeContainer>
+            <DebouncedResizeContainer
+                onDebouncedResize={(nextChartSize) => dispatch({ type: 'patch', patch: { chartSize: nextChartSize } })}
+            >
+                {swrChartApiResp.data ? (
+                    <FullPerfChart
+                        threadName={selectedThread}
+                        apiData={swrChartApiResp.data as PerfChartApiSuccessResp}
+                        apiDataAge={apiDataAge}
+                        width={chartSize.width}
+                        height={chartSize.height}
+                        isDarkMode={isDarkMode}
+                        showPlayerCount={showPlayerCount}
+                        showFxsMemory={showFxsMemory}
+                        showNodeMemory={showNodeMemory}
+                    />
+                ) : swrChartApiResp.isLoading ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <Loader2Icon className="text-muted-foreground size-16 animate-spin" />
+                    </div>
+                ) : apiFailReason || swrChartApiResp.error ? (
+                    <ChartErrorMessage error={apiFailReason || swrChartApiResp.error} />
+                ) : null}
+            </DebouncedResizeContainer>
         </div>
     );
 }

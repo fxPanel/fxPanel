@@ -52,7 +52,7 @@ export const availableFilters = [
 
 //FIXME: this doesn't require exporting, but HMR doesn't work without it
 // eslint-disable-next-line react-refresh/only-export-components
-export const throttleFunc = throttle(
+const throttleFunc = throttle(
     1250,
     (func: any) => {
         func();
@@ -68,6 +68,15 @@ export type PlayersSearchBoxReturnStateType = {
     filters: PlayersTableFiltersType;
 };
 
+type PlayerSearchUiState = {
+    isSearchTypeDropdownOpen: boolean;
+    isFilterDropdownOpen: boolean;
+    currSearchType: string;
+    selectedFilters: string[];
+    hasSearchText: boolean;
+    rememberSearchType: boolean;
+};
+
 type PlayerSearchBoxProps = {
     doSearch: (search: PlayersTableSearchType, filters: PlayersTableFiltersType, rememberSearchType: boolean) => void;
     initialState: PlayersSearchBoxReturnStateType & { rememberSearchType: boolean };
@@ -75,12 +84,27 @@ type PlayerSearchBoxProps = {
 
 export function PlayerSearchBox({ doSearch, initialState }: PlayerSearchBoxProps) {
     const inputRef = useRef<HTMLInputElement>(null);
-    const [isSearchTypeDropdownOpen, setSearchTypeDropdownOpen] = useState(false);
-    const [isFilterDropdownOpen, setFilterDropdownOpen] = useState(false);
-    const [currSearchType, setCurrSearchType] = useState<string>(initialState.search.type);
-    const [selectedFilters, setSelectedFilters] = useState<string[]>(initialState.filters);
-    const [hasSearchText, setHasSearchText] = useState(!!initialState.search.value);
-    const [rememberSearchType, setRememberSearchType] = useState(initialState.rememberSearchType);
+    const initialStateRef = useRef(initialState);
+    const [uiState, setUiState] = useState<PlayerSearchUiState>({
+        isSearchTypeDropdownOpen: false,
+        isFilterDropdownOpen: false,
+        currSearchType: initialStateRef.current.search.type,
+        selectedFilters: initialStateRef.current.filters,
+        hasSearchText: !!initialStateRef.current.search.value,
+        rememberSearchType: initialStateRef.current.rememberSearchType,
+    });
+    const {
+        isSearchTypeDropdownOpen,
+        isFilterDropdownOpen,
+        currSearchType,
+        selectedFilters,
+        hasSearchText,
+        rememberSearchType,
+    } = uiState;
+
+    const setUiField = <K extends keyof PlayerSearchUiState>(key: K, value: PlayerSearchUiState[K]) => {
+        setUiState((prev) => ({ ...prev, [key]: value }));
+    };
 
     const updateSearch = useCallback(() => {
         if (!inputRef.current) return;
@@ -101,29 +125,30 @@ export function PlayerSearchBox({ doSearch, initialState }: PlayerSearchBoxProps
         } else if (e.key === 'Escape') {
             inputRef.current!.value = '';
             throttleFunc(updateSearch);
-            setHasSearchText(false);
+            setUiField('hasSearchText', false);
         } else {
             throttleFunc(updateSearch);
         }
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setHasSearchText(e.currentTarget.value.length > 0);
+        setUiField('hasSearchText', e.currentTarget.value.length > 0);
     };
 
     const clearSearchBtn = () => {
         inputRef.current!.value = '';
         throttleFunc.cancel({ upcomingOnly: true });
         updateSearch();
-        setHasSearchText(false);
+        setUiField('hasSearchText', false);
     };
 
     const filterSelectChange = (filter: string, checked: boolean) => {
-        if (checked) {
-            setSelectedFilters((prev) => [...prev, filter]);
-        } else {
-            setSelectedFilters((prev) => prev.filter((f) => f !== filter));
-        }
+        setUiState((prev) => ({
+            ...prev,
+            selectedFilters: checked
+                ? [...prev.selectedFilters, filter]
+                : prev.selectedFilters.filter((currentFilter) => currentFilter !== filter),
+        }));
     };
 
     //It's render time! 🎉
@@ -138,12 +163,11 @@ export function PlayerSearchBox({ doSearch, initialState }: PlayerSearchBoxProps
                 <div className="relative min-w-44 grow">
                     <Input
                         type="text"
-                        autoFocus
                         autoCapitalize="off"
                         autoCorrect="off"
                         ref={inputRef}
                         placeholder={selectedSearchType.placeholder}
-                        defaultValue={initialState.search.value}
+                        defaultValue={initialStateRef.current.search.value}
                         onKeyDown={handleInputKeyDown}
                         onChange={handleInputChange}
                     />
@@ -158,23 +182,27 @@ export function PlayerSearchBox({ doSearch, initialState }: PlayerSearchBoxProps
                 </div>
 
                 <div className="flex grow flex-wrap content-start gap-2">
-                    <DropdownMenu>
+                    <DropdownMenu
+                        open={isSearchTypeDropdownOpen}
+                        onOpenChange={(open) => setUiField('isSearchTypeDropdownOpen', open)}
+                    >
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="outline"
-                                role="combobox"
                                 aria-expanded={isSearchTypeDropdownOpen}
-                                onClick={() => setSearchTypeDropdownOpen(!isSearchTypeDropdownOpen)}
                                 className="xs:w-48 grow justify-between md:grow-0"
                             >
                                 Search by {selectedSearchType.label}
-                                <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className="w-48">
                             <DropdownMenuLabel>Search Type</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuRadioGroup value={currSearchType} onValueChange={setCurrSearchType}>
+                            <DropdownMenuRadioGroup
+                                value={currSearchType}
+                                onValueChange={(value) => setUiField('currSearchType', value)}
+                            >
                                 {availableSearchTypes.map((searchType) => (
                                     <DropdownMenuRadioItem
                                         key={searchType.value}
@@ -189,24 +217,25 @@ export function PlayerSearchBox({ doSearch, initialState }: PlayerSearchBoxProps
                             <DropdownMenuCheckboxItem
                                 checked={rememberSearchType}
                                 className="cursor-pointer"
-                                onCheckedChange={setRememberSearchType}
+                                onCheckedChange={(checked) => setUiField('rememberSearchType', checked === true)}
                             >
                                 Remember Option
                             </DropdownMenuCheckboxItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <DropdownMenu>
+                    <DropdownMenu
+                        open={isFilterDropdownOpen}
+                        onOpenChange={(open) => setUiField('isFilterDropdownOpen', open)}
+                    >
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="outline"
-                                role="combobox"
                                 aria-expanded={isFilterDropdownOpen}
-                                onClick={() => setFilterDropdownOpen(!isFilterDropdownOpen)}
                                 className="xs:w-44 grow justify-between md:grow-0"
                             >
                                 {filterBtnMessage}
-                                <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className="w-44">
@@ -225,8 +254,11 @@ export function PlayerSearchBox({ doSearch, initialState }: PlayerSearchBoxProps
                                 </DropdownMenuCheckboxItem>
                             ))}
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="cursor-pointer" onClick={() => setSelectedFilters([])}>
-                                <FilterXIcon className="mr-2 h-4 w-4" />
+                            <DropdownMenuItem
+                                className="cursor-pointer"
+                                onClick={() => setUiField('selectedFilters', [])}
+                            >
+                                <FilterXIcon className="mr-2 size-4" />
                                 Clear Filters
                             </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -237,7 +269,7 @@ export function PlayerSearchBox({ doSearch, initialState }: PlayerSearchBoxProps
                             <DropdownMenuTrigger asChild>
                                 <Button variant="outline" className="grow md:grow-0">
                                     More
-                                    <ChevronDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    <ChevronDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent>
@@ -248,7 +280,7 @@ export function PlayerSearchBox({ doSearch, initialState }: PlayerSearchBoxProps
                                     </Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem className="h-10 py-2 pr-2 pl-1" asChild>
-                                    <Link href="/system/master-actions#cleandb" className="cursor-pointer">
+                                    <Link href="/settings#danger-zone" className="cursor-pointer">
                                         <ExternalLinkIcon className="mr-1 inline h-4" />
                                         Prune Players/HWIDs
                                     </Link>

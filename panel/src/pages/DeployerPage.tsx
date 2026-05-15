@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useBackendApi, ApiTimeout } from '@/hooks/fetch';
 import { txToast } from '@/components/TxToaster';
 import { Button } from '@/components/ui/button';
@@ -7,8 +7,9 @@ import { Loader2Icon, ChevronRightIcon, ChevronLeftIcon, CheckIcon, XIcon } from
 import useSWR from 'swr';
 import { navigate as setLocation } from 'wouter/use-browser-location';
 import { LazyMonacoEditor } from '@/components/LazyMonacoEditor';
+import { createDuplicateKeyResolver } from '@/lib/utils';
 
-// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// - -  Types - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 type RecipeInfo = {
     isTrustedSource: boolean;
     name: string;
@@ -64,7 +65,40 @@ type ActionResp = {
     markdown?: boolean;
 };
 
-// â”€â”€ Step: Review â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+type StepInputState = {
+    svLicense: string;
+    dbHost: string;
+    dbPort: string;
+    dbUser: string;
+    dbPassword: string;
+    dbName: string;
+    dbDelete: boolean;
+    githubToken: string;
+    customVars: Record<string, string>;
+};
+
+function reduceStepInputState(state: StepInputState, action: Partial<StepInputState>): StepInputState {
+    return {
+        ...state,
+        ...action,
+    };
+}
+
+type StepRunState = {
+    log: string[];
+    progress: number;
+    status: StatusResp['status'];
+    statusError: string | null;
+};
+
+function reduceStepRunState(state: StepRunState, action: Partial<StepRunState>): StepRunState {
+    return {
+        ...state,
+        ...action,
+    };
+}
+
+// - -  Step: Review - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 function StepReview({
     recipe,
     onConfirm,
@@ -74,7 +108,8 @@ function StepReview({
     onConfirm: (editedRecipe: string) => void;
     onCancel: () => void;
 }) {
-    const [recipeText, setRecipeText] = useState(recipe.raw);
+    const initialRecipeTextRef = useRef(recipe.raw);
+    const [recipeText, setRecipeText] = useState(initialRecipeTextRef.current);
     const [showEditor, setShowEditor] = useState(false);
 
     return (
@@ -114,17 +149,17 @@ function StepReview({
             </div>
             <div className="flex justify-between">
                 <Button variant="outline" onClick={onCancel}>
-                    <XIcon className="mr-1 h-4 w-4" /> Cancel
+                    <XIcon className="mr-1 size-4" /> Cancel
                 </Button>
                 <Button onClick={() => onConfirm(recipeText)}>
-                    Next <ChevronRightIcon className="ml-1 h-4 w-4" />
+                    Next <ChevronRightIcon className="ml-1 size-4" />
                 </Button>
             </div>
         </div>
     );
 }
 
-// â”€â”€ Step: Input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// - -  Step: Input - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 function StepInput({
     requireDBConfig,
     requiresGithubToken,
@@ -144,21 +179,25 @@ function StepInput({
     onBack: () => void;
     onCancel: () => void;
 }) {
-    const [svLicense, setSvLicense] = useState(defaultLicenseKey);
-    const [dbHost, setDbHost] = useState(defaults?.mysqlHost ?? 'localhost');
-    const [dbPort, setDbPort] = useState(defaults?.mysqlPort ?? '3306');
-    const [dbUser, setDbUser] = useState(defaults?.mysqlUser ?? 'root');
-    const [dbPassword, setDbPassword] = useState(defaults?.mysqlPassword ?? '');
-    const [dbName, setDbName] = useState(defaults?.mysqlDatabase ?? '');
-    const [dbDelete, setDbDelete] = useState(false);
-    const [githubToken, setGithubToken] = useState('');
-    const [customVars, setCustomVars] = useState<Record<string, string>>(() => {
-        const initial: Record<string, string> = {};
-        inputVars?.forEach((v) => {
-            initial[v.name] = v.value;
-        });
-        return initial;
+    const initialLicenseKeyRef = useRef(defaultLicenseKey);
+    const [state, dispatch] = useReducer(reduceStepInputState, undefined, () => {
+        const initialCustomVars: Record<string, string> = {};
+        for (const inputVar of inputVars ?? []) {
+            initialCustomVars[inputVar.name] = inputVar.value;
+        }
+        return {
+            svLicense: initialLicenseKeyRef.current,
+            dbHost: defaults?.mysqlHost ?? 'localhost',
+            dbPort: defaults?.mysqlPort ?? '3306',
+            dbUser: defaults?.mysqlUser ?? 'root',
+            dbPassword: defaults?.mysqlPassword ?? '',
+            dbName: defaults?.mysqlDatabase ?? '',
+            dbDelete: false,
+            githubToken: '',
+            customVars: initialCustomVars,
+        } satisfies StepInputState;
     });
+    const { svLicense, dbHost, dbPort, dbUser, dbPassword, dbName, dbDelete, githubToken, customVars } = state;
 
     const handleSubmit = () => {
         const vars: Record<string, any> = { svLicense };
@@ -196,7 +235,7 @@ function StepInput({
                 <Input
                     id="sv_licenseKey"
                     value={svLicense}
-                    onChange={(e) => setSvLicense(e.target.value)}
+                    onChange={(e) => dispatch({ svLicense: e.target.value })}
                     placeholder="cfxk_..."
                 />
                 <p className="text-muted-foreground text-xs">
@@ -208,7 +247,6 @@ function StepInput({
                         className="text-primary underline"
                     >
                         portal.cfx.re
-
                     </a>
                 </p>
             </div>
@@ -222,19 +260,19 @@ function StepInput({
                             <label htmlFor="db_host" className="text-xs font-medium">
                                 Host
                             </label>
-                            <Input id="db_host" value={dbHost} onChange={(e) => setDbHost(e.target.value)} />
+                            <Input id="db_host" value={dbHost} onChange={(e) => dispatch({ dbHost: e.target.value })} />
                         </div>
                         <div className="space-y-1">
                             <label htmlFor="db_port" className="text-xs font-medium">
                                 Port
                             </label>
-                            <Input id="db_port" value={dbPort} onChange={(e) => setDbPort(e.target.value)} />
+                            <Input id="db_port" value={dbPort} onChange={(e) => dispatch({ dbPort: e.target.value })} />
                         </div>
                         <div className="space-y-1">
                             <label htmlFor="db_user" className="text-xs font-medium">
                                 Username
                             </label>
-                            <Input id="db_user" value={dbUser} onChange={(e) => setDbUser(e.target.value)} />
+                            <Input id="db_user" value={dbUser} onChange={(e) => dispatch({ dbUser: e.target.value })} />
                         </div>
                         <div className="space-y-1">
                             <label htmlFor="db_password" className="text-xs font-medium">
@@ -244,7 +282,7 @@ function StepInput({
                                 id="db_password"
                                 type="password"
                                 value={dbPassword}
-                                onChange={(e) => setDbPassword(e.target.value)}
+                                onChange={(e) => dispatch({ dbPassword: e.target.value })}
                             />
                         </div>
                     </div>
@@ -252,10 +290,14 @@ function StepInput({
                         <label htmlFor="db_name" className="text-xs font-medium">
                             Database Name
                         </label>
-                        <Input id="db_name" value={dbName} onChange={(e) => setDbName(e.target.value)} />
+                        <Input id="db_name" value={dbName} onChange={(e) => dispatch({ dbName: e.target.value })} />
                     </div>
                     <label className="flex items-center gap-2 text-xs">
-                        <input type="checkbox" checked={dbDelete} onChange={(e) => setDbDelete(e.target.checked)} />
+                        <input
+                            type="checkbox"
+                            checked={dbDelete}
+                            onChange={(e) => dispatch({ dbDelete: e.target.checked })}
+                        />
                         Delete existing database if it exists (use with caution!)
                     </label>
                 </div>
@@ -270,7 +312,7 @@ function StepInput({
                     <Input
                         id="github_token"
                         value={githubToken}
-                        onChange={(e) => setGithubToken(e.target.value)}
+                        onChange={(e) => dispatch({ githubToken: e.target.value })}
                         placeholder="ghp_..."
                     />
                     <p className="text-muted-foreground text-xs">Required to download private recipe resources.</p>
@@ -287,7 +329,14 @@ function StepInput({
                             {v.description && <p className="text-muted-foreground text-xs">{v.description}</p>}
                             <Input
                                 value={customVars[v.name] ?? ''}
-                                onChange={(e) => setCustomVars((prev) => ({ ...prev, [v.name]: e.target.value }))}
+                                onChange={(e) =>
+                                    dispatch({
+                                        customVars: {
+                                            ...customVars,
+                                            [v.name]: e.target.value,
+                                        },
+                                    })
+                                }
                             />
                         </div>
                     ))}
@@ -297,27 +346,31 @@ function StepInput({
             <div className="flex justify-between">
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={onBack}>
-                        <ChevronLeftIcon className="mr-1 h-4 w-4" /> Back
+                        <ChevronLeftIcon className="mr-1 size-4" /> Back
                     </Button>
                     <Button variant="outline" onClick={onCancel}>
-                        <XIcon className="mr-1 h-4 w-4" /> Cancel
+                        <XIcon className="mr-1 size-4" /> Cancel
                     </Button>
                 </div>
                 <Button onClick={handleSubmit}>
-                    Run Recipe <ChevronRightIcon className="ml-1 h-4 w-4" />
+                    Run Recipe <ChevronRightIcon className="ml-1 size-4" />
                 </Button>
             </div>
         </div>
     );
 }
 
-// â”€â”€ Step: Run â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// - -  Step: Run - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 function StepRun({ deployPath, onDone, onCancel }: { deployPath: string; onDone: () => void; onCancel: () => void }) {
-    const [log, setLog] = useState<string[]>([]);
-    const [progress, setProgress] = useState(0);
-    const [status, setStatus] = useState<'running' | 'done' | 'failed'>('running');
-    const [statusError, setStatusError] = useState<string | null>(null);
+    const [state, dispatch] = useReducer(reduceStepRunState, {
+        log: [],
+        progress: 0,
+        status: 'running',
+        statusError: null,
+    });
+    const { log, progress, status, statusError } = state;
     const logEndRef = useRef<HTMLDivElement>(null);
+    const getLogKey = createDuplicateKeyResolver();
 
     const statusApi = useBackendApi<StatusResp>({
         method: 'GET',
@@ -328,6 +381,12 @@ function StepRun({ deployPath, onDone, onCancel }: { deployPath: string; onDone:
         const MAX_POLL_RETRIES = 10;
         let cancelled = false;
         let failureCount = 0;
+        let pollTimeoutId: number | null = null;
+
+        const schedulePoll = (delay: number) => {
+            pollTimeoutId = window.setTimeout(poll, delay);
+        };
+
         const poll = () => {
             if (cancelled) return;
             statusApi({
@@ -338,29 +397,37 @@ function StepRun({ deployPath, onDone, onCancel }: { deployPath: string; onDone:
                         window.location.reload();
                         return;
                     }
-                    setLog(data.log || []);
-                    setProgress(data.progress || 0);
-                    setStatus(data.status);
-                    setStatusError(null);
+                    dispatch({
+                        log: data.log || [],
+                        progress: data.progress || 0,
+                        status: data.status,
+                        statusError: null,
+                    });
                     if (data.status === 'running') {
-                        setTimeout(poll, 1000);
+                        schedulePoll(1000);
                     }
                 },
                 error(msg) {
                     if (cancelled) return;
                     failureCount++;
                     if (failureCount >= MAX_POLL_RETRIES) {
-                        setStatusError(msg || 'Lost connection to the server after multiple retries.');
+                        dispatch({
+                            status: 'failed',
+                            statusError: msg || 'Lost connection to the server after multiple retries.',
+                        });
                         return;
                     }
                     const delay = Math.min(1000 * Math.pow(2, failureCount - 1), 30000);
-                    setTimeout(poll, delay);
+                    schedulePoll(delay);
                 },
             });
         };
         poll();
         return () => {
             cancelled = true;
+            if (pollTimeoutId !== null) {
+                window.clearTimeout(pollTimeoutId);
+            }
         };
     }, [statusApi]);
 
@@ -385,13 +452,13 @@ function StepRun({ deployPath, onDone, onCancel }: { deployPath: string; onDone:
                 />
             </div>
             <div className="text-muted-foreground text-xs">
-                {progress}% â€” {status}
+                {progress}% - {status}
             </div>
 
             {/* Log output */}
             <div className="bg-muted/30 h-64 overflow-y-auto rounded-lg border p-3 font-mono text-xs">
-                {log.map((line, i) => (
-                    <div key={i} className="whitespace-pre-wrap">
+                {log.map((line) => (
+                    <div key={getLogKey(line)} className="whitespace-pre-wrap">
                         {line}
                     </div>
                 ))}
@@ -400,22 +467,24 @@ function StepRun({ deployPath, onDone, onCancel }: { deployPath: string; onDone:
 
             <div className="flex justify-between">
                 <Button variant="outline" onClick={onCancel} disabled={status === 'running'}>
-                    <XIcon className="mr-1 h-4 w-4" /> Cancel
+                    <XIcon className="mr-1 size-4" /> Cancel
                 </Button>
                 {status === 'done' && (
                     <Button onClick={onDone}>
-                        Next <ChevronRightIcon className="ml-1 h-4 w-4" />
+                        Next <ChevronRightIcon className="ml-1 size-4" />
                     </Button>
                 )}
                 {status === 'failed' && (
-                    <p className="text-destructive text-sm font-semibold">Deployment failed. Check the log above.</p>
+                    <p className="text-destructive text-sm font-semibold">
+                        {statusError ?? 'Deployment failed. Check the log above.'}
+                    </p>
                 )}
             </div>
         </div>
     );
 }
 
-// â”€â”€ Step: Configure â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// - -  Step: Configure - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 function StepConfigure({
     serverCFG,
     onSave,
@@ -425,7 +494,8 @@ function StepConfigure({
     onSave: (cfg: string) => void;
     onCancel: () => void;
 }) {
-    const [cfgText, setCfgText] = useState(serverCFG);
+    const initialServerCfgRef = useRef(serverCFG);
+    const [cfgText, setCfgText] = useState(initialServerCfgRef.current);
 
     return (
         <div className="space-y-4">
@@ -443,17 +513,17 @@ function StepConfigure({
             </div>
             <div className="flex justify-between">
                 <Button variant="outline" onClick={onCancel}>
-                    <XIcon className="mr-1 h-4 w-4" /> Cancel
+                    <XIcon className="mr-1 size-4" /> Cancel
                 </Button>
                 <Button onClick={() => onSave(cfgText)}>
-                    <CheckIcon className="mr-1 h-4 w-4" /> Save & Start Server
+                    <CheckIcon className="mr-1 size-4" /> Save & Start Server
                 </Button>
             </div>
         </div>
     );
 }
 
-// â”€â”€ Main Deployer Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// - -  Main Deployer Page - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 export default function DeployerPage() {
     const [actionLoading, setActionLoading] = useState(false);
 
@@ -541,7 +611,7 @@ export default function DeployerPage() {
     if (isLoading || !data) {
         return (
             <div className="flex h-full items-center justify-center">
-                <Loader2Icon className="h-8 w-8 animate-spin" />
+                <Loader2Icon className="size-8 animate-spin" />
             </div>
         );
     }
@@ -567,7 +637,7 @@ export default function DeployerPage() {
                     return (
                         <div key={label} className="flex flex-1 items-center gap-1">
                             <div
-                                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                                className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                                     isDone
                                         ? 'bg-primary text-primary-foreground'
                                         : isActive
@@ -575,7 +645,7 @@ export default function DeployerPage() {
                                           : 'border-muted-foreground/30 text-muted-foreground border'
                                 }`}
                             >
-                                {isDone ? <CheckIcon className="h-3 w-3" /> : i + 1}
+                                {isDone ? <CheckIcon className="size-3" /> : i + 1}
                             </div>
                             <span
                                 className={`hidden text-xs sm:inline ${isActive ? 'text-primary font-semibold' : 'text-muted-foreground'}`}
@@ -594,7 +664,7 @@ export default function DeployerPage() {
             <div className="rounded-lg border p-6">
                 {actionLoading && (
                     <div className="flex items-center justify-center py-8">
-                        <Loader2Icon className="h-8 w-8 animate-spin" />
+                        <Loader2Icon className="size-8 animate-spin" />
                     </div>
                 )}
                 {!actionLoading && data.step === 'review' && data.recipe && (

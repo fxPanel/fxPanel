@@ -10,7 +10,7 @@ type StyledHourOptionProps = {
     label12h: string;
 };
 
-export function StyledHourOption({ value, label24h, label12h }: StyledHourOptionProps) {
+function StyledHourOption({ value, label24h, label12h }: StyledHourOptionProps) {
     return (
         <SelectItem value={value} className="group/timeOption">
             <div className="flex items-center justify-around gap-2">
@@ -66,7 +66,7 @@ export function TimeInputDialog({ title, isOpen, onClose, onSubmit }: TimeInputD
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col space-y-1.5">
+                        <div className="flex flex-col gap-y-1.5">
                             <Label htmlFor={hourSelectId} className="text-sm font-medium">
                                 Hour
                             </Label>
@@ -81,7 +81,7 @@ export function TimeInputDialog({ title, isOpen, onClose, onSubmit }: TimeInputD
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="flex flex-col space-y-1.5">
+                        <div className="flex flex-col gap-y-1.5">
                             <Label htmlFor={minuteSelectId} className="text-sm font-medium">
                                 Minute
                             </Label>

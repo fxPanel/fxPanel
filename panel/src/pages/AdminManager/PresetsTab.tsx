@@ -83,7 +83,7 @@ export default function PresetsTab({ presets, isLoading, canManage, onSave }: Pr
     if (isLoading) {
         return (
             <div className="flex items-center justify-center py-12">
-                <Loader2Icon className="text-muted-foreground h-8 w-8 animate-spin" />
+                <Loader2Icon className="text-muted-foreground size-8 animate-spin" />
             </div>
         );
     }
@@ -96,7 +96,7 @@ export default function PresetsTab({ presets, isLoading, canManage, onSave }: Pr
                 </p>
                 {canManage && (
                     <Button variant="outline" className="shrink-0 gap-1.5" onClick={() => setEditTarget('new')}>
-                        <PlusIcon className="h-4 w-4" />
+                        <PlusIcon className="size-4" />
                         New Preset
                     </Button>
                 )}
@@ -116,23 +116,20 @@ export default function PresetsTab({ presets, isLoading, canManage, onSave }: Pr
                                     {canManage && (
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
-                                                    <MoreVerticalIcon className="h-4 w-4" />
+                                                <Button variant="ghost" size="icon" className="size-7 shrink-0">
+                                                    <MoreVerticalIcon className="size-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
-                                                <DropdownMenuItem
-                                                    onClick={() => setEditTarget(preset)}
-                                                    className="gap-2"
-                                                >
-                                                    <PencilIcon className="h-3.5 w-3.5" />
+                                                <DropdownMenuItem onClick={() => setEditTarget(preset)} className="gap-2">
+                                                    <PencilIcon className="size-3.5" />
                                                     Edit
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem
                                                     onClick={() => handleDuplicate(preset)}
                                                     className="gap-2"
                                                 >
-                                                    <CopyIcon className="h-3.5 w-3.5" />
+                                                    <CopyIcon className="size-3.5" />
                                                     Duplicate
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
@@ -140,7 +137,7 @@ export default function PresetsTab({ presets, isLoading, canManage, onSave }: Pr
                                                     onClick={() => handleDelete(preset)}
                                                     className="text-destructive focus:text-destructive gap-2"
                                                 >
-                                                    <TrashIcon className="h-3.5 w-3.5" />
+                                                    <TrashIcon className="size-3.5" />
                                                     Delete
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
@@ -149,7 +146,7 @@ export default function PresetsTab({ presets, isLoading, canManage, onSave }: Pr
                                 </div>
 
                                 <div className="text-muted-foreground flex items-center gap-1.5 text-sm">
-                                    <ShieldCheckIcon className="h-3.5 w-3.5" />
+                                    <ShieldCheckIcon className="size-3.5" />
                                     {permCount}
                                 </div>
 

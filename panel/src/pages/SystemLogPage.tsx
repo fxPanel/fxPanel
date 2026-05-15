@@ -3,11 +3,11 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { useEventListener } from 'usehooks-ts';
 import { useContentRefresh } from '@/hooks/pages';
 import { debounce, throttle } from 'throttle-debounce';
-import { ChevronsDownIcon, Loader2Icon } from 'lucide-react';
+import { ChevronsDownIcon, Loader2Icon, ScrollTextIcon } from 'lucide-react';
 
 import './LiveConsole/xtermOverrides.css';
 import '@xterm/xterm/css/xterm.css';
@@ -17,6 +17,7 @@ import terminalOptions from './LiveConsole/xtermOptions';
 import ScrollDownAddon from './LiveConsole/ScrollDownAddon';
 import LiveConsoleSearchBar from './LiveConsole/LiveConsoleSearchBar';
 import { useBackendApi } from '@/hooks/fetch';
+import { PageHeader } from '@/components/page-header';
 
 //Helpers
 const keyDebounceTime = 150; //ms
@@ -24,11 +25,49 @@ type SystemLogPageProps = {
     pageName: 'console';
 };
 
+type SystemLogPageState = {
+    isLoading: boolean;
+    loadError: string;
+    showSearchBar: boolean;
+};
+
+type SystemLogPageAction =
+    | { type: 'logsLoaded' }
+    | { type: 'logsFailed'; loadError: string }
+    | { type: 'setShowSearchBar'; showSearchBar: boolean };
+
+function reduceSystemLogPageState(state: SystemLogPageState, action: SystemLogPageAction): SystemLogPageState {
+    switch (action.type) {
+        case 'logsLoaded':
+            return {
+                ...state,
+                isLoading: false,
+                loadError: '',
+            };
+        case 'logsFailed':
+            return {
+                ...state,
+                isLoading: false,
+                loadError: action.loadError,
+            };
+        case 'setShowSearchBar':
+            return {
+                ...state,
+                showSearchBar: action.showSearchBar,
+            };
+        default:
+            return state;
+    }
+}
+
 //NOTE: most of this code is yoinked from the live console page
 export default function SystemLogPage({ pageName }: SystemLogPageProps) {
-    const [isLoading, setIsLoading] = useState(true);
-    const [loadError, setLoadError] = useState('');
-    const [showSearchBar, setShowSearchBar] = useState(false);
+    const [state, dispatch] = useReducer(reduceSystemLogPageState, {
+        isLoading: true,
+        loadError: '',
+        showSearchBar: false,
+    });
+    const { isLoading, loadError, showSearchBar } = state;
     const refreshPage = useContentRefresh();
     const getLogsApi = useBackendApi<{ data: string }>({
         method: 'GET',
@@ -152,14 +191,13 @@ export default function SystemLogPage({ pageName }: SystemLogPageProps) {
             //fetch logs
             getLogsApi({
                 success: (resp, toastId) => {
-                    setIsLoading(false);
+                    dispatch({ type: 'logsLoaded' });
                     writeToTerminal(resp.data);
                     term.writeln('');
                     term.writeln('\u001b[33m[END OF LOG - REFRESH THE PAGE TO LOAD MORE]\u001b');
                 },
                 error: (message, toastId) => {
-                    setIsLoading(false);
-                    setLoadError(message);
+                    dispatch({ type: 'logsFailed', loadError: message });
                 },
             });
         }
@@ -174,12 +212,12 @@ export default function SystemLogPage({ pageName }: SystemLogPageProps) {
             }
         } else if (e.code === 'Escape') {
             searchAddon.clearDecorations();
-            setShowSearchBar(false);
+            dispatch({ type: 'setShowSearchBar', showSearchBar: false });
         } else if (e.code === 'KeyF' && (e.ctrlKey || e.metaKey)) {
             if (showSearchBar) {
                 sendSearchKeyEvent('focus');
             } else {
-                setShowSearchBar(true);
+                dispatch({ type: 'setShowSearchBar', showSearchBar: true });
             }
             e.preventDefault();
         } else if (e.code === 'F3') {
@@ -204,70 +242,63 @@ export default function SystemLogPage({ pageName }: SystemLogPageProps) {
 
     //Rendering stuff
     const pageTitle = 'Console Log';
-    const pageSubtitle = "Output of fxPanel to it's parent terminal, including usually hidden debug messages.";
+    const pageSubtitle = 'Raw fxPanel process output, including startup and debug messages.';
 
     return (
-        <div className="dark text-primary bg-card flex h-full w-full flex-col overflow-clip border md:rounded-xl">
-            <div className="flex shrink flex-col space-y-4 border-b px-1 py-2 sm:px-4">
-                <div className="flex items-center space-x-2">
-                    <svg
-                        className="h-4 w-4 text-green-500"
-                        fill="none"
-                        height="24"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        viewBox="0 0 24 24"
-                        width="24"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <polyline points="4 17 10 11 4 5" />
-                        <line x1="12" x2="20" y1="19" y2="19" />
-                    </svg>
-                    <p className="font-mono text-sm">
-                        {pageTitle} - <span className="text-muted-foreground">{pageSubtitle}</span>
-                    </p>
+        <div className="h-contentvh mx-auto flex w-full max-w-(--breakpoint-xl) flex-col gap-4 px-2 md:px-0">
+            <PageHeader title={pageTitle} description={pageSubtitle} icon={<ScrollTextIcon />} />
+
+            <div className="dark text-primary bg-card border-border/60 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border shadow-sm">
+                <div className="bg-secondary/20 border-border/60 flex shrink-0 items-center gap-3 border-b px-4 py-3">
+                    <div className="bg-secondary/50 text-accent/80 flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/10">
+                        <ScrollTextIcon className="size-4" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-sm font-semibold">Captured terminal stream</p>
+                        <p className="text-muted-foreground truncate text-xs">{pageSubtitle}</p>
+                    </div>
                 </div>
-            </div>
 
-            <div className="relative flex grow flex-col overflow-hidden">
-                {/* Loading overlay */}
-                {isLoading && !loadError ? (
-                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60">
-                        <div className="text-muted-foreground flex flex-col items-center justify-center gap-6 select-none">
-                            <Loader2Icon className="h-16 w-16 animate-spin" />
-                            <h2 className="animate-pulse text-3xl font-light tracking-wider">
-                                &nbsp;&nbsp;&nbsp;Loading...
-                            </h2>
+                <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+                    {/* Loading overlay */}
+                    {isLoading && !loadError ? (
+                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60">
+                            <div className="text-muted-foreground flex flex-col items-center justify-center gap-6 select-none">
+                                <Loader2Icon className="size-16 animate-spin" />
+                                <h2 className="animate-pulse text-3xl font-light tracking-wider">
+                                    &nbsp;&nbsp;&nbsp;Loading…
+                                </h2>
+                            </div>
                         </div>
-                    </div>
-                ) : null}
-                {loadError && (
-                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-black/60">
-                        <h2 className="text-muted-foreground text-2xl font-light tracking-wider select-none">
-                            Error fetching {pageTitle}:
-                        </h2>
-                        <p className="text-destructive-inline mx-8 max-w-(--breakpoint-md) font-mono">{loadError}</p>
-                    </div>
-                )}
+                    ) : null}
+                    {loadError && (
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-black/60">
+                            <h2 className="text-muted-foreground text-2xl font-light tracking-wider select-none">
+                                Error fetching {pageTitle}:
+                            </h2>
+                            <p className="text-destructive-inline mx-8 max-w-(--breakpoint-md) font-mono">
+                                {loadError}
+                            </p>
+                        </div>
+                    )}
 
-                {/* Terminal container */}
-                <div ref={containerRef} className="absolute top-1 right-0 bottom-0 left-2" />
+                    {/* Terminal container */}
+                    <div ref={containerRef} className="absolute top-1 right-0 bottom-0 left-2" />
 
-                {/* Search bar */}
-                <LiveConsoleSearchBar show={showSearchBar} setShow={setShowSearchBar} searchAddon={searchAddon} />
+                    {/* Search bar */}
+                    {showSearchBar ? <LiveConsoleSearchBar setShow={setShowSearchBar} searchAddon={searchAddon} /> : null}
 
-                {/* Scroll to bottom */}
-                <button
-                    ref={jumpBottomBtnRef}
-                    className="absolute right-2 bottom-0 z-10 hidden opacity-75"
-                    onClick={() => {
-                        term.scrollToBottom();
-                    }}
-                >
-                    <ChevronsDownIcon className="h-20 w-20 animate-pulse hover:scale-110 hover:animate-none" />
-                </button>
+                    {/* Scroll to bottom */}
+                    <button
+                        ref={jumpBottomBtnRef}
+                        className="absolute right-2 bottom-0 z-10 hidden opacity-75"
+                        onClick={() => {
+                            term.scrollToBottom();
+                        }}
+                    >
+                        <ChevronsDownIcon className="size-20 animate-pulse hover:scale-110 hover:animate-none" />
+                    </button>
+                </div>
             </div>
         </div>
     );

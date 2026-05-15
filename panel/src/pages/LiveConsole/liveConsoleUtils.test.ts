@@ -14,7 +14,8 @@ suite('filterTermLine', () => {
         empty: '',
         info: '[             fxPanel] ================================================================ ',
         resGroup: '[resources:[builders]] Warning: [builders]x does not have a resource manifest (fxmanifest.lua)',
-        input: '[             tabarra] dd ',
+        // Tag segment must be `[` + exactly 20 chars + `] ` to match filterTermLine regex.
+        input: '[12345678901234567890] dd ',
         normal: '[           resources] Scanning resources.',
         normal2: '[                 cmd] No such command dd.',
         normal3: '[ citizen-server-main] Warning: The players.json endpoint has been modified',

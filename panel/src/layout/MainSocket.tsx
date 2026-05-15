@@ -9,6 +9,7 @@ import { useAuthedFetcher } from '@/hooks/fetch';
 import { LogoutReasonHash } from '@/pages/auth/Login';
 import { createMockGlobalStatus, createMockPlayerlistEvents } from '@/pages/Dashboard/devMockData';
 import type { GlobalStatusType } from '@shared/socketioTypes';
+import { isDevMockStatusOptInEnabled, DEV_MOCK_STATUS_STORAGE_KEY } from '@/lib/devFlags';
 
 /**
  * Responsible for starting and handling the main socket.io connection
@@ -24,16 +25,35 @@ export default function MainSocket() {
     const processUpdateAvailableEvent = useProcessUpdateAvailableEvent();
     const setBanTemplates = useSetBanTemplates();
     const authedFetcher = useAuthedFetcher();
+    const setSocketOfflineState = (isOffline: boolean) => {
+        setIsSocketOffline(isOffline);
+    };
+    const applyGlobalStatus = (status: GlobalStatusType | null) => {
+        setGlobalStatus(status);
+    };
+    const applyPlayerlistEvents = (playerlistData: any) => {
+        processPlayerlistEvents(playerlistData);
+    };
+    const applyBanTemplates = (banTemplates: any) => {
+        setBanTemplates(banTemplates);
+    };
+    const applyAuthData = (authData: any) => {
+        setAuthData(authData);
+    };
+    const applyUpdateAvailable = (data: any) => {
+        processUpdateAvailableEvent(data);
+    };
 
     //Runing on mount only
     // Mount-only socket setup: handlers/setters are stable singletons (Jotai
     // setters, refs, module-level helpers) and the socket itself is a singleton.
     // Re-running this effect would tear down and re-register all listeners.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // react-doctor-disable-next-line react-doctor/no-cascading-set-state
     useEffect(() => {
         //SocketIO - singleton, rooms passed via query on first connect
         const socket = getSocket();
-        const isDevMockMode = import.meta.env.DEV;
+        const isDevMockMode = import.meta.env.DEV && isDevMockStatusOptInEnabled();
         let latestLiveStatus: GlobalStatusType | null = null;
         let devMockInterval: ReturnType<typeof setInterval> | undefined;
 
@@ -46,20 +66,24 @@ export default function MainSocket() {
                 'background:#b91c1c;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px;',
                 'color:inherit;',
             );
+        } else if (import.meta.env.DEV) {
+            console.info(
+                `[DEV MOCK MODE OFF] Using live socket status. To enable mock status, set ?devMockStatus=1 or localStorage["${DEV_MOCK_STATUS_STORAGE_KEY}"] = "1".`,
+            );
         }
 
         const pushDevMockState = () => {
             const now = Date.now();
-            setGlobalStatus(createMockGlobalStatus(now, latestLiveStatus));
+            applyGlobalStatus(createMockGlobalStatus(now, latestLiveStatus));
             if (window.txConsts.isWebInterface) {
-                processPlayerlistEvents(createMockPlayerlistEvents(now));
+                applyPlayerlistEvents(createMockPlayerlistEvents(now));
             }
         };
         const connectHandler = () => {
             console.log('Main Socket.IO Connected.');
-            setIsSocketOffline(false);
+            setSocketOfflineState(false);
             authedFetcher('/settings/banTemplates')
-                .then((data) => setBanTemplates(data))
+                .then((data) => applyBanTemplates(data))
                 .catch(() => {});
         };
         const disconnectHandler = (message: string) => {
@@ -70,7 +94,7 @@ export default function MainSocket() {
             socketStateChangeCounter.current = newId;
             setTimeout(() => {
                 if (socketStateChangeCounter.current === newId) {
-                    setIsSocketOffline(true);
+                    setSocketOfflineState(true);
                 }
             }, 500);
         };
@@ -91,22 +115,22 @@ export default function MainSocket() {
                 latestLiveStatus = status;
                 return;
             }
-            setGlobalStatus(status);
+            applyGlobalStatus(status);
         };
         const playerlistHandler = (playerlistData: any) => {
             if (!window.txConsts.isWebInterface) return;
             if (isDevMockMode) return;
-            processPlayerlistEvents(playerlistData);
+            applyPlayerlistEvents(playerlistData);
         };
         const updateHandler = (data: any) => {
-            processUpdateAvailableEvent(data);
+            applyUpdateAvailable(data);
         };
         const authDataHandler = (authData: any) => {
             console.warn('Got updateAuthData from websocket', authData);
-            setAuthData(authData);
+            applyAuthData(authData);
         };
         const banTemplatesHandler = (data: any) => {
-            setBanTemplates(data);
+            applyBanTemplates(data);
         };
 
         socket.on('connect', connectHandler);
@@ -115,6 +139,7 @@ export default function MainSocket() {
         socket.on('logout', logoutHandler);
         socket.on('refreshToUpdate', refreshHandler);
         socket.on('txAdminShuttingDown', shutdownHandler);
+        socket.on('fxpAdminShuttingDown', shutdownHandler);
         socket.on('status', statusHandler);
         socket.on('playerlist', playerlistHandler);
         socket.on('updateAvailable', updateHandler);
@@ -133,13 +158,14 @@ export default function MainSocket() {
             socket.off('logout', logoutHandler);
             socket.off('refreshToUpdate', refreshHandler);
             socket.off('txAdminShuttingDown', shutdownHandler);
+            socket.off('fxpAdminShuttingDown', shutdownHandler);
             socket.off('status', statusHandler);
             socket.off('playerlist', playerlistHandler);
             socket.off('updateAvailable', updateHandler);
             socket.off('updateAuthData', authDataHandler);
             socket.off('banTemplatesUpdate', banTemplatesHandler);
             if (devMockInterval) clearInterval(devMockInterval);
-            setGlobalStatus(null);
+            applyGlobalStatus(null);
             destroySocket();
         };
     }, []);

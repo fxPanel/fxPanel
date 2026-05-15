@@ -18,6 +18,9 @@ let playerJoinCounter = 0;
 export const get = async (ctx: AuthedCtx) => {
     //Sanity check
     if (!txDevEnv.ENABLED) return ctx.send({ error: 'this route is dev mode only' });
+    if (!ctx.admin.testPermission('master', modulename)) {
+        return ctx.utils.error(403, 'Master permission required for developer routes.');
+    }
     const schemaRes = paramsSchema.safeParse(ctx.params);
     if (!schemaRes.success) return ctx.utils.error(400, 'Invalid Request');
     console.warn(devWarningMessage);
@@ -34,6 +37,9 @@ export const get = async (ctx: AuthedCtx) => {
 export const post = async (ctx: AuthedCtx) => {
     //Sanity check
     if (!txDevEnv.ENABLED) return ctx.send({ error: 'this route is dev mode only' });
+    if (!ctx.admin.testPermission('master', modulename)) {
+        return ctx.utils.error(403, 'Master permission required for developer routes.');
+    }
     const schemaRes = paramsSchema.safeParse(ctx.params);
     if (!schemaRes.success) return ctx.utils.error(400, 'Invalid Request');
     console.warn(devWarningMessage);

@@ -115,7 +115,7 @@ export default function ServerLogPage() {
             <PageHeader title="Server Log" icon={<ScrollTextIcon />} />
 
             <TooltipProvider delayDuration={300}>
-                <div className="bg-card flex w-full flex-1 flex-col overflow-hidden border border-border/60 shadow-sm md:rounded-xl">
+                <div className="bg-card border-border/60 flex w-full flex-1 flex-col overflow-hidden border shadow-sm md:rounded-xl">
                     <ServerLogToolbar
                         isLive={log.isLive}
                         isConnected={log.isConnected}
@@ -145,32 +145,32 @@ export default function ServerLogPage() {
                         {/* Loading older indicator */}
                         {log.isLoadingOlder && (
                             <div className="text-muted-foreground flex items-center justify-center gap-2 py-3 text-sm">
-                                <Loader2Icon className="h-4 w-4 animate-spin" />
-                                Loading older events...
+                                <Loader2Icon className="size-4 animate-spin" />
+                                Loading older events…
                             </div>
                         )}
 
                         {/* Loading session indicator */}
                         {log.isLoadingSession && (
                             <div className="text-muted-foreground flex items-center justify-center gap-2 py-8 text-sm">
-                                <Loader2Icon className="h-4 w-4 animate-spin" />
-                                Loading session...
+                                <Loader2Icon className="size-4 animate-spin" />
+                                Loading session…
                             </div>
                         )}
 
                         {/* No older data indicator */}
                         {!log.hasOlderData && (
-                            <div className="text-muted-foreground py-2 text-center text-xs">— Beginning of log —</div>
+                            <div className="text-muted-foreground py-2 text-center text-xs">Beginning of log</div>
                         )}
 
                         {/* Log entries */}
                         {displayItems.length > 0 ? (
                             <div className="divide-border/50 divide-y">
-                                {displayItems.map((item, idx) => {
+                                {displayItems.map((item) => {
                                     if (item.kind === 'group') {
                                         return (
                                             <GroupedJoinLeave
-                                                key={`g-${item.events[0].ts}-${idx}`}
+                                                key={`g-${item.type}-${item.events[0].ts}-${item.events[item.events.length - 1]?.ts ?? item.events[0].ts}-${item.events.length}`}
                                                 events={item.events}
                                                 type={item.type}
                                             />
@@ -178,7 +178,7 @@ export default function ServerLogPage() {
                                     }
                                     return (
                                         <ServerLogEntry
-                                            key={`${item.event.ts}-${item.event.type}-${idx}`}
+                                            key={`${item.event.ts}-${item.event.type}-${item.event.src.id || item.event.src.name}-${item.event.msg}`}
                                             event={item.event}
                                             onPlayerClick={handlePlayerClick}
                                         />
@@ -202,7 +202,7 @@ export default function ServerLogPage() {
                             </div>
                         ) : (
                             <div className="text-muted-foreground flex items-center justify-center py-16 text-sm">
-                                {log.isConnected ? 'Waiting for events...' : 'Connecting...'}
+                                {log.isConnected ? 'Waiting for events…' : 'Connecting…'}
                             </div>
                         )}
 
@@ -216,10 +216,10 @@ export default function ServerLogPage() {
                             <Button
                                 variant="secondary"
                                 size="icon"
-                                className="h-8 w-8 rounded-full shadow-lg"
+                                className="size-8 rounded-full shadow-lg"
                                 onClick={scrollToBottom}
                             >
-                                <ArrowDownIcon className="h-4 w-4" />
+                                <ArrowDownIcon className="size-4" />
                             </Button>
                         </div>
                     )}

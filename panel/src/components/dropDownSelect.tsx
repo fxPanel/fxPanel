@@ -8,48 +8,50 @@ const DropDownSelect = SelectPrimitive.Root;
 
 const DropDownSelectValue = SelectPrimitive.Value;
 
-const DropDownSelectTrigger = React.forwardRef<
-    React.ElementRef<typeof SelectPrimitive.Trigger>,
-    React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ children }, ref) => (
+const DropDownSelectTrigger = ({ children, ref }: React.ComponentPropsWithRef<typeof SelectPrimitive.Trigger>) => (
     <SelectPrimitive.Trigger ref={ref} asChild>
         {children}
     </SelectPrimitive.Trigger>
-));
+);
 DropDownSelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 
-const DropDownSelectScrollUpButton = React.forwardRef<
-    React.ElementRef<typeof SelectPrimitive.ScrollUpButton>,
-    React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollUpButton>
->(({ className, ...props }, ref) => (
+const DropDownSelectScrollUpButton = ({
+    className,
+    ref,
+    ...props
+}: React.ComponentPropsWithRef<typeof SelectPrimitive.ScrollUpButton>) => (
     <SelectPrimitive.ScrollUpButton
         ref={ref}
         className={cn('flex cursor-default items-center justify-center py-1', className)}
         {...props}
     >
-        <ChevronUp className="h-4 w-4" />
+        <ChevronUp className="size-4" />
     </SelectPrimitive.ScrollUpButton>
-));
+);
 DropDownSelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName;
 
-const DropDownSelectScrollDownButton = React.forwardRef<
-    React.ElementRef<typeof SelectPrimitive.ScrollDownButton>,
-    React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollDownButton>
->(({ className, ...props }, ref) => (
+const DropDownSelectScrollDownButton = ({
+    className,
+    ref,
+    ...props
+}: React.ComponentPropsWithRef<typeof SelectPrimitive.ScrollDownButton>) => (
     <SelectPrimitive.ScrollDownButton
         ref={ref}
         className={cn('flex cursor-default items-center justify-center py-1', className)}
         {...props}
     >
-        <ChevronDown className="h-4 w-4" />
+        <ChevronDown className="size-4" />
     </SelectPrimitive.ScrollDownButton>
-));
+);
 DropDownSelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayName;
 
-const DropDownSelectContent = React.forwardRef<
-    React.ElementRef<typeof SelectPrimitive.Content>,
-    React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = 'popper', ...props }, ref) => (
+const DropDownSelectContent = ({
+    className,
+    children,
+    position = 'popper',
+    ref,
+    ...props
+}: React.ComponentPropsWithRef<typeof SelectPrimitive.Content>) => (
     <SelectPrimitive.Content
         ref={ref}
         className={cn(
@@ -73,13 +75,15 @@ const DropDownSelectContent = React.forwardRef<
         </SelectPrimitive.Viewport>
         <DropDownSelectScrollDownButton />
     </SelectPrimitive.Content>
-));
+);
 DropDownSelectContent.displayName = SelectPrimitive.Content.displayName;
 
-const DropDownSelectItem = React.forwardRef<
-    React.ElementRef<typeof SelectPrimitive.Item>,
-    React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
+const DropDownSelectItem = ({
+    className,
+    children,
+    ref,
+    ...props
+}: React.ComponentPropsWithRef<typeof SelectPrimitive.Item>) => (
     <SelectPrimitive.Item
         ref={ref}
         className={cn(
@@ -90,15 +94,12 @@ const DropDownSelectItem = React.forwardRef<
     >
         <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
     </SelectPrimitive.Item>
-));
+);
 DropDownSelectItem.displayName = SelectPrimitive.Item.displayName;
 
 export {
     DropDownSelect,
-    DropDownSelectValue,
     DropDownSelectTrigger,
     DropDownSelectItem,
     DropDownSelectContent,
-    DropDownSelectScrollUpButton,
-    DropDownSelectScrollDownButton,
 };

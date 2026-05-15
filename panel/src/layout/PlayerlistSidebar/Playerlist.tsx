@@ -148,19 +148,18 @@ function PlayerlistFilter({
                 )}
             </div>
             <DropdownMenu>
-                <DropdownMenuTrigger asChild disabled={!!filterString}>
-                    <button
-                        className={cn(
-                            'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
-                            'ring-offset-background focus-visible:ring-ring transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden',
-                            'bg-muted border shadow-xs',
-                            'hover:bg-primary hover:text-primary-foreground hover:border-primary',
-                            filterString && 'pointer-events-none opacity-50',
-                            hasActiveFilters && 'border-primary',
-                        )}
-                    >
-                        <SlidersHorizontalIcon className="h-5" />
-                    </button>
+                <DropdownMenuTrigger
+                    disabled={!!filterString}
+                    className={cn(
+                        'inline-flex size-8 shrink-0 items-center justify-center rounded-md',
+                        'ring-offset-background focus-visible:ring-ring transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden',
+                        'bg-muted border shadow-xs',
+                        'hover:bg-primary hover:text-primary-foreground hover:border-primary',
+                        filterString && 'pointer-events-none opacity-50',
+                        hasActiveFilters && 'border-primary',
+                    )}
+                >
+                    <SlidersHorizontalIcon className="h-5" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
                     <DropdownMenuLabel>Filter by Tag</DropdownMenuLabel>
@@ -183,7 +182,7 @@ function PlayerlistFilter({
                         onClick={() => setTagFilters(new Set())}
                         className="hover:bg-secondary! focus:bg-secondary! cursor-pointer hover:text-current! focus:text-current!"
                     >
-                        <FilterXIcon className="mr-2 h-4 w-4" />
+                        <FilterXIcon className="mr-2 size-4" />
                         Clear Filter
                     </DropdownMenuItem>
 
@@ -240,6 +239,14 @@ function PlayerlistPlayer({ virtualItem, player, modalOpener, tagLookup }: Playe
                 backgroundImage: tagColor ? `linear-gradient(90deg, ${tagColor}12, transparent 60%)` : undefined,
             }}
             onClick={() => modalOpener(player.netid)}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    if (event.key === ' ') event.preventDefault();
+                    modalOpener(player.netid);
+                }
+            }}
+            role="button"
+            tabIndex={0}
         >
             <div className="pid-block leading-[1.7]">
                 <span className="pid-badge">{player.netid}</span>

@@ -6,8 +6,8 @@ import { numberToLocaleString } from '@/lib/utils';
 import { msToShortDuration } from '@/lib/dateTime';
 import { playerDropCategories } from '@/lib/playerDropCategories';
 import { PlayerDropsCategoryCount } from './chartingUtils';
-import { TimelineDropsChartData } from './TimelineDropsChart';
-import { DrilldownRangeSelectionType } from './PlayerDropsPage';
+import { TimelineDropsChartData } from '@/pages/PlayerDropsPage/TimelineDropsChart';
+import { DrilldownRangeSelectionType } from '@/pages/PlayerDropsPage/PlayerDropsPage';
 
 //Helpers
 const translate = (x: number, y: number) => `translate(${x}, ${y})`;
@@ -339,10 +339,11 @@ export default function drawDropsTimeline({
 
         //Set legend data
         const allNumEls = legendRef.querySelectorAll<HTMLSpanElement>('span[data-category]');
+        const dropCounts = new Map(datum.drops);
         for (const numEl of allNumEls) {
             const catName = numEl.getAttribute('data-category');
             if (!catName) continue;
-            const catCount = datum.drops.find(([cat]) => cat === catName)?.[1] ?? 0;
+            const catCount = dropCounts.get(catName) ?? 0;
             numEl.textContent = numberToLocaleString(catCount);
         }
         const changeFlagEl = legendRef.querySelector<HTMLDivElement>('div.change-flag');
@@ -365,8 +366,10 @@ export default function drawDropsTimeline({
         const legendWidth = legendRef.clientWidth;
         let legendX = datumStartX - legendWidth - 10 + margins.left;
         if (legendX < margins.left) legendX = datumStartX + 10 + margins.left;
-        legendRef.style.left = `${legendX}px`;
-        legendRef.style.opacity = '1';
+        Object.assign(legendRef.style, {
+            left: `${legendX}px`,
+            opacity: '1',
+        });
         if (wasTransitionDisabled) {
             setTimeout(() => {
                 legendRef.style.transitionProperty = 'all';

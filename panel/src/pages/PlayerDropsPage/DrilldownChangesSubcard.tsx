@@ -75,7 +75,7 @@ function ChangedResourcesEvent({ change }: ChangedResourcesEventProps) {
             <p>
                 Updated:{' '}
                 {processedChanges.updated.map((item, index, array) => (
-                    <Fragment key={index}>
+                    <Fragment key={`${item.resName}:${item.oldVer}:${item.newVer}`}>
                         <DiffUpdated>
                             {item.resName} {item.oldVer} -&gt; {item.newVer}
                         </DiffUpdated>
@@ -107,7 +107,7 @@ export default function DrilldownChangesSubcard({ changes }: DrilldownChangesSub
     };
 
     const sortedChanges = useMemo(() => {
-        return [...changes].sort((a, b) => a.ts - b.ts);
+        return changes.toSorted((a, b) => a.ts - b.ts);
     }, [changes]);
 
     if (!changes.length) {
@@ -116,9 +116,15 @@ export default function DrilldownChangesSubcard({ changes }: DrilldownChangesSub
 
     return (
         <div className="space-y-3">
-            {sortedChanges.map((change, index) => (
-                <div
-                    key={index}
+            {sortedChanges.map((change) => {
+                const changeKey =
+                    change.type === 'resourcesChanged'
+                        ? `${change.type}:${change.ts}:${change.resRemoved.join('|')}:${change.resAdded.join('|')}`
+                        : `${change.type}:${change.ts}:${change.oldVersion}:${change.newVersion}`;
+
+                return (
+                    <div
+                        key={changeKey}
                     className={cn(
                         'bg-secondary/15 border-border/30 rounded-lg border px-3 py-2.5',
                         'hover:bg-secondary/25 transition-colors',
@@ -137,8 +143,9 @@ export default function DrilldownChangesSubcard({ changes }: DrilldownChangesSub
                         {change.type === 'gameChanged' && <ChangedGameEvent change={change} />}
                         {change.type === 'resourcesChanged' && <ChangedResourcesEvent change={change} />}
                     </div>
-                </div>
-            ))}
+                    </div>
+                );
+            })}
         </div>
     );
 }

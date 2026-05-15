@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import ThreadPerfCard from './ThreadPerfCard';
 import PlayerDropCard from './PlayerDropCard';
 import FullPerfCard from './FullPerfCard';
@@ -19,6 +19,7 @@ import { UsersIcon, ClockIcon, LayoutDashboardIcon } from 'lucide-react';
 import { msToShortDuration } from '@/lib/dateTime';
 import { PageHeader } from '@/components/page-header';
 import { createMockDashboardEvent } from './devMockData';
+import { isDevMockStatusOptInEnabled } from '@/lib/devFlags';
 
 function DashboardHeaderStats() {
     const status = useAtomValue(globalStatusAtom);
@@ -27,10 +28,11 @@ function DashboardHeaderStats() {
 
     const isRunning = status.runner.isChildAlive;
     const isHealthy = status.server.health === FxMonitorHealth.ONLINE;
-    const uptimeStr = msToShortDuration(status.server.uptime, {
-        units: ['d', 'h', 'm'],
-        delimiter: ' ',
-    }) || '--';
+    const uptimeStr =
+        msToShortDuration(status.server.uptime, {
+            units: ['d', 'h', 'm'],
+            delimiter: ' ',
+        }) || '--';
 
     return (
         <>
@@ -40,14 +42,18 @@ function DashboardHeaderStats() {
                     isRunning && isHealthy
                         ? 'border-success/30 bg-success/10 text-success-inline'
                         : isRunning
-                            ? 'border-warning/30 bg-warning/10 text-warning-inline'
-                            : 'border-destructive/30 bg-destructive/10 text-destructive-inline',
+                          ? 'border-warning/30 bg-warning/10 text-warning-inline'
+                          : 'border-destructive/30 bg-destructive/10 text-destructive-inline',
                 )}
             >
                 <span
                     className={cn(
-                        'h-1.5 w-1.5 rounded-full',
-                        isRunning && isHealthy ? 'bg-success animate-pulse' : isRunning ? 'bg-warning' : 'bg-destructive',
+                        'size-1.5 rounded-full',
+                        isRunning && isHealthy
+                            ? 'bg-success animate-pulse'
+                            : isRunning
+                              ? 'bg-warning'
+                              : 'bg-destructive',
                     )}
                 />
                 {isRunning ? (isHealthy ? 'Online' : 'Degraded') : 'Offline'}
@@ -55,12 +61,12 @@ function DashboardHeaderStats() {
             {isRunning && (
                 <>
                     <div className="border-border/50 bg-card flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs">
-                        <UsersIcon className="text-muted-foreground/70 h-3 w-3" />
+                        <UsersIcon className="text-muted-foreground/70 size-3" />
                         <span className="font-mono font-semibold">{playerCount}</span>
                         <span className="text-muted-foreground/70">players</span>
                     </div>
                     <div className="border-border/50 bg-card flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs">
-                        <ClockIcon className="text-muted-foreground/70 h-3 w-3" />
+                        <ClockIcon className="text-muted-foreground/70 size-3" />
                         <span className="font-mono font-semibold">{uptimeStr}</span>
                         <span className="text-muted-foreground/70">uptime</span>
                     </div>
@@ -75,13 +81,20 @@ function DashboardPageInner() {
     const dashboardWidgets = useAddonWidgets('dashboard.main');
     const sidebarWidgets = useAddonWidgets('dashboard.sidebar');
     const status = useAtomValue(globalStatusAtom);
+    const applyDashboardData = useCallback(
+        (nextData: any) => {
+            setDashboardData(nextData);
+        },
+        [setDashboardData],
+    );
 
     //Running on mount only
     useEffect(() => {
-        if (import.meta.env.DEV) {
-            setDashboardData(createMockDashboardEvent());
+        const isDevMockMode = import.meta.env.DEV && isDevMockStatusOptInEnabled();
+        if (isDevMockMode) {
+            applyDashboardData(createMockDashboardEvent());
             const mockInterval = setInterval(() => {
-                setDashboardData(createMockDashboardEvent());
+                applyDashboardData(createMockDashboardEvent());
             }, 4_000);
 
             return () => {
@@ -92,7 +105,7 @@ function DashboardPageInner() {
         const socket = getSocket();
 
         const dashboardHandler = (data: any) => {
-            setDashboardData(data);
+            applyDashboardData(data);
         };
 
         socket.on('dashboard', dashboardHandler);
@@ -102,7 +115,7 @@ function DashboardPageInner() {
             socket.off('dashboard', dashboardHandler);
             leaveSocketRoom('dashboard');
         };
-    }, [setDashboardData]);
+    }, [applyDashboardData]);
 
     return (
         <div className="flex min-h-full w-full min-w-96 flex-1 flex-col gap-4">
@@ -130,8 +143,23 @@ function DashboardPageInner() {
             {dashboardWidgets.length > 0 && (
                 <div className="flex w-full flex-col gap-4 lg:flex-row lg:flex-wrap">
                     {dashboardWidgets.map((w) => (
-                        <ErrorBoundary key={`${w.addonId}-${w.title}`} fallback={<div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">Addon widget error: {w.title}</div>}>
-                            <div className={w.defaultSize === 'full' ? 'w-full' : w.defaultSize === 'quarter' ? 'min-w-0 flex-1' : 'min-w-0 flex-1 lg:flex-[2]'}>
+                        <ErrorBoundary
+                            key={`${w.addonId}-${w.title}`}
+                            fallback={
+                                <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-xl border p-4 text-sm">
+                                    Addon widget error: {w.title}
+                                </div>
+                            }
+                        >
+                            <div
+                                className={
+                                    w.defaultSize === 'full'
+                                        ? 'w-full'
+                                        : w.defaultSize === 'quarter'
+                                          ? 'min-w-0 flex-1'
+                                          : 'min-w-0 flex-1 lg:flex-[2]'
+                                }
+                            >
                                 <w.Component />
                             </div>
                         </ErrorBoundary>
@@ -141,7 +169,14 @@ function DashboardPageInner() {
             {sidebarWidgets.length > 0 && (
                 <div className="flex w-full flex-col gap-4 lg:flex-row lg:flex-wrap">
                     {sidebarWidgets.map((w) => (
-                        <ErrorBoundary key={`${w.addonId}-${w.title}`} fallback={<div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">Addon widget error: {w.title}</div>}>
+                        <ErrorBoundary
+                            key={`${w.addonId}-${w.title}`}
+                            fallback={
+                                <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-xl border p-4 text-sm">
+                                    Addon widget error: {w.title}
+                                </div>
+                            }
+                        >
                             <w.Component />
                         </ErrorBoundary>
                     ))}
@@ -181,7 +216,11 @@ export default function DashboardPage() {
     }, [txConfigState, setLocation]);
 
     if (txConfigState === TxConfigState.Setup || txConfigState === TxConfigState.Deployer) {
-        return null;
+        return (
+            <div className="flex size-full min-h-[12rem] items-center justify-center">
+                <GenericSpinner msg="Loading…" />
+            </div>
+        );
     } else if (txConfigState !== TxConfigState.Ready) {
         return (
             <div className="size-full">

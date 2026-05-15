@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useReducer, useCallback, useRef } from 'react';
 import React from 'react';
 import { useAuthedFetcher } from '@/hooks/fetch';
 import { useCsrfToken, useAdminPerms } from '@/hooks/auth';
@@ -19,7 +19,7 @@ export interface AddonPanelModule {
 /**
  * A fully resolved addon with its manifest + loaded module
  */
-export interface LoadedAddon {
+interface LoadedAddon {
     descriptor: AddonPanelDescriptor;
     module: AddonPanelModule;
     error?: string;
@@ -47,6 +47,39 @@ export interface AddonWidgetEntry {
     defaultSize?: string;
     permission?: string;
     Component: React.ComponentType<any>;
+}
+
+type AddonLoaderState = {
+    addons: LoadedAddon[];
+    loading: boolean;
+    error: string | null;
+};
+
+type AddonLoaderAction =
+    | { type: 'loaded'; addons: LoadedAddon[] }
+    | { type: 'failed'; error: string };
+
+function addonLoaderReducer(state: AddonLoaderState, action: AddonLoaderAction): AddonLoaderState {
+    switch (action.type) {
+        case 'loaded':
+            if (state.addons === action.addons && !state.loading && state.error === null) {
+                return state;
+            }
+            return {
+                ...state,
+                addons: action.addons,
+                loading: false,
+                error: null,
+            };
+        case 'failed':
+            return {
+                ...state,
+                loading: false,
+                error: action.error,
+            };
+        default:
+            return state;
+    }
 }
 
 function asComponentMap(input: unknown): Record<string, React.ComponentType<any>> {
@@ -79,9 +112,7 @@ function normalizeAddonModuleExports(raw: any): AddonPanelModule {
 
     const widgets = asComponentMap(raw?.widgets ?? rawDefault?.widgets);
 
-    const settings =
-        raw?.settings ??
-        rawDefault?.settings;
+    const settings = raw?.settings ?? rawDefault?.settings;
 
     return {
         pages,
@@ -172,11 +203,7 @@ function getAddonFallbackPage(addonId: string, pageTitle: string, error?: string
                     'Page: ',
                     React.createElement('span', { className: 'font-medium' }, pageTitle),
                 ),
-                React.createElement(
-                    'p',
-                    { className: 'text-muted-foreground mt-3 text-sm whitespace-pre-wrap' },
-                    msg,
-                ),
+                React.createElement('p', { className: 'text-muted-foreground mt-3 text-sm whitespace-pre-wrap' }, msg),
             ),
         );
     };
@@ -215,66 +242,44 @@ async function fetchAddonModuleSource(entryUrl: string): Promise<{ contentType: 
     return { contentType, text };
 }
 
-function executeAddonSourceFallback(source: string, sourceUrl: string): AddonPanelModule {
-    // Compatibility fallback for environments where dynamic module import fails
-    // even though the addon JS is reachable. We support the common addon export
-    // shape (`export const pages/widgets/settings = ...`) plus simple
-    // `export function` and `export class` declarations for those same names.
-    //
-    // KNOWN LIMITATIONS — this is a regex-based source rewrite, NOT a real ES
-    // module loader. The following export forms are NOT supported and will
-    // either throw at eval-time or be silently ignored:
-    //   - `export default ...`
-    //   - `export { a, b as c }` / `export { a } from './x'` (named re-exports)
-    //   - `export * from './x'`
-    //   - `export async function ...` (the `async` keyword is not stripped)
-    //   - Any export wrapped across multiple lines / unusual whitespace
-    //
-    // Addons that need any of the above must rely on the primary `import()`
-    // path. The runner below still returns whatever pages/widgets/settings
-    // bindings happen to exist after the rewrite.
-    const transformed = source
-        .replace(/\bexport\s+const\s+([A-Za-z_$][\w$]*)\s*=/g, 'const $1 =')
-        .replace(/\bexport\s+function\s+([A-Za-z_$][\w$]*)/g, 'function $1')
-        .replace(/\bexport\s+class\s+([A-Za-z_$][\w$]*)/g, 'class $1');
-
-    const runner = new Function(
-        'window',
-        `${transformed}\n//# sourceURL=${sourceUrl}\nreturn {\n` +
-            `  pages: (typeof pages !== 'undefined' ? pages : undefined),\n` +
-            `  widgets: (typeof widgets !== 'undefined' ? widgets : undefined),\n` +
-            `  settings: (typeof settings !== 'undefined' ? settings : undefined),\n` +
-            `};`,
-    ) as (win: Window) => AddonPanelModule;
-
-    console.warn(
-        `[addons] executeAddonSourceFallback: regex-based source rewrite used for "${sourceUrl}". ` +
-            'This addon is not using the native dynamic import path. ' +
-            'Report this to the addon developer if unexpected exports are missing.',
+async function importAddonSource(source: string, sourceUrl: string): Promise<any> {
+    // Import the fetched source through a Blob URL so the browser still parses
+    // it as an ES module without relying on string evaluation.
+    const blobUrl = URL.createObjectURL(
+        new Blob([`${source}\n//# sourceURL=${sourceUrl}`], { type: 'text/javascript' }),
     );
-    return runner(window);
+
+    try {
+        // Addon panel entries are fetched from the backend at runtime, so this import target cannot be static.
+        // react-doctor-disable-next-line react-doctor/no-dynamic-import-path
+        return await import(/* @vite-ignore */ blobUrl);
+    } catch (error) {
+        throw new Error(`Failed to evaluate fetched addon module from ${sourceUrl}: ${(error as Error).message}`);
+    } finally {
+        URL.revokeObjectURL(blobUrl);
+    }
 }
 
 async function importAddonEntry(entryUrl: string): Promise<any> {
     const sanitized = sanitizeAddonEntryUrl(entryUrl) || entryUrl;
 
-    // Prefer fetch + eval over dynamic import().  In dev mode the panel JS is
-    // served by Vite on a different port than the backend.  Dynamic import()
+    // Prefer fetch + Blob module import over direct dynamic import(). In dev mode the panel JS is
+    // served by Vite on a different port than the backend. Dynamic import()
     // resolves relative URLs against the Vite module origin, which doesn't
     // have the session cookie context — the backend returns an HTML logout page
-    // and the browser rejects it as a non-JS MIME type.  fetch() always resolves
-    // against the *document* origin (the backend), sends credentials correctly,
-    // and avoids MIME-type enforcement.
+    // and the browser rejects it as a non-JS MIME type. fetch() always resolves
+    // against the document origin (the backend), sends credentials correctly,
+    // and lets us evaluate the fetched source as a real module.
     try {
         const { text } = await fetchAddonModuleSource(sanitized);
-        return executeAddonSourceFallback(text, sanitized);
-    } catch (e) {
-        console.error(`[addons] fetch+eval failed for "${sanitized}", falling back to native import:`, e);
+        return await importAddonSource(text, sanitized);
+    } catch (error) {
+        throw new Error(
+            `Failed to load addon module from ${sanitized}. ` +
+                'fxPanel panel addons must ship a bundled ESM entry file (for example panel/index.js) ' +
+                `that can be fetched and evaluated directly. ${(error as Error).message}`,
+        );
     }
-
-    // Fallback: native dynamic import for real ES modules (e.g. future addons
-    // that use their own import graph and cannot be eval'd as a plain script).
-    return import(/* @vite-ignore */ sanitized);
 }
 
 // Singleton state so we don't re-fetch on every mount
@@ -321,14 +326,20 @@ function ensureAddonPanelStyleLoaded(addonId: string, stylesUrl: string | null |
 export function useAddonLoader() {
     const fetcher = useAuthedFetcher();
     const csrfToken = useCsrfToken();
-    const [addons, setAddons] = useState<LoadedAddon[]>(cachedAddons ?? []);
-    const [loading, setLoading] = useState(!cachedAddons);
-    const [error, setError] = useState<string | null>(null);
+    const [state, dispatch] = useReducer(addonLoaderReducer, {
+        addons: cachedAddons ?? [],
+        loading: !cachedAddons,
+        error: null,
+    });
     const mountedRef = useRef(true);
+    const hydratedCachedAddonsRef = useRef(false);
+    const { addons, loading, error } = state;
 
     useEffect(() => {
         mountedRef.current = true;
-        return () => { mountedRef.current = false; };
+        return () => {
+            mountedRef.current = false;
+        };
     }, []);
 
     // Keep the module-level token in sync so the txAddonApi getter is never stale
@@ -338,16 +349,17 @@ export function useAddonLoader() {
 
     useEffect(() => {
         if (cachedAddons) {
-            setAddons(cachedAddons);
-            setLoading(false);
+            if (!hydratedCachedAddonsRef.current) {
+                hydratedCachedAddonsRef.current = true;
+                dispatch({ type: 'loaded', addons: cachedAddons });
+            }
             return;
         }
 
         if (loadPromise) {
             loadPromise.then((result) => {
                 if (mountedRef.current) {
-                    setAddons(result);
-                    setLoading(false);
+                    dispatch({ type: 'loaded', addons: result });
                 }
             });
             return;
@@ -361,13 +373,13 @@ export function useAddonLoader() {
                     return [];
                 }
 
-                const loaded: LoadedAddon[] = [];
-
                 // Expose React and API helpers as globals so addon scripts can use them
                 (window as any).React = React;
                 (window as any).txAddonApi = {
                     ...(window as any).txAddonApi,
-                    get csrfToken() { return currentCsrfToken; },
+                    get csrfToken() {
+                        return currentCsrfToken;
+                    },
                     getHeaders: () => ({
                         'Content-Type': 'application/json',
                         'X-TxAdmin-CsrfToken': currentCsrfToken ?? '',
@@ -383,7 +395,8 @@ export function useAddonLoader() {
                     },
                 };
 
-                for (const descriptor of resp.addons) {
+                const loaded = await Promise.all(
+                    resp.addons.map(async (descriptor) => {
                     try {
                         ensureAddonPanelStyleLoaded(descriptor.id, descriptor.stylesUrl);
 
@@ -392,43 +405,40 @@ export function useAddonLoader() {
                             throw new Error(`Addon ${descriptor.id} missing panel entryUrl in manifest payload.`);
                         }
 
-                        // Dynamically import the addon entry script.
-                        // If transformed URLs fail (e.g. ?import path issues), retry with
-                        // a sanitized URL through native dynamic import.
+                        // Load the bundled addon entry module from the backend.
                         const mod = await importAddonEntry(entryUrl);
                         const normalized = normalizeAddonModuleExports(mod);
 
-                        loaded.push({
+                        return {
                             descriptor,
                             module: {
                                 pages: normalized.pages ?? {},
                                 widgets: normalized.widgets ?? {},
                                 settings: descriptor.settingsComponent
-                                    ? (
-                                        resolveNamedComponent(normalized.widgets ?? {}, descriptor.settingsComponent)
-                                        ?? resolveNamedComponent(normalized.pages ?? {}, descriptor.settingsComponent)
-                                        ?? normalized.settings
-                                        ?? mod?.[descriptor.settingsComponent]
-                                    )
+                                    ? (resolveNamedComponent(normalized.widgets ?? {}, descriptor.settingsComponent) ??
+                                      resolveNamedComponent(normalized.pages ?? {}, descriptor.settingsComponent) ??
+                                      normalized.settings ??
+                                      mod?.[descriptor.settingsComponent])
                                     : undefined,
                             },
-                        });
+                        } satisfies LoadedAddon;
                     } catch (err) {
                         console.error(`[AddonLoader] Failed to load addon ${descriptor.id}:`, err);
-                        loaded.push({
+                        return {
                             descriptor,
                             module: { pages: {}, widgets: {} },
                             error: (err as Error).message,
-                        });
+                        } satisfies LoadedAddon;
                     }
-                }
+                    }),
+                );
 
                 cachedAddons = loaded;
                 return loaded;
             } catch (err) {
                 console.error('[AddonLoader] Failed to fetch addon manifest:', err);
                 if (mountedRef.current) {
-                    setError((err as Error).message);
+                    dispatch({ type: 'failed', error: (err as Error).message });
                 }
                 cachedAddons = [];
                 return [];
@@ -437,8 +447,7 @@ export function useAddonLoader() {
 
         loadPromise.then((result) => {
             if (mountedRef.current) {
-                setAddons(result);
-                setLoading(false);
+                dispatch({ type: 'loaded', addons: result });
             }
         });
     }, [fetcher]);
@@ -447,13 +456,14 @@ export function useAddonLoader() {
     const pages: AddonPageRoute[] = [];
     for (const addon of addons) {
         if (!addon.descriptor.pages) continue;
+        const addonId = addon.descriptor.id;
         for (const page of addon.descriptor.pages) {
             const Component =
-                resolveNamedComponent(addon.module.pages ?? {}, page.component)
-                ?? getAddonFallbackPage(addon.descriptor.id, page.title, addon.error);
+                resolveNamedComponent(addon.module.pages ?? {}, page.component) ??
+                getAddonFallbackPage(addonId, page.title, addon.error);
             pages.push({
-                addonId: addon.descriptor.id,
-                path: `/addon/${addon.descriptor.id}${page.path}`,
+                addonId,
+                path: `/addon/${addonId}${page.path}`,
                 title: page.title,
                 sidebar: normalizeAddonSidebarFlag(addon.descriptor, page),
                 permission: page.permission,
@@ -489,7 +499,7 @@ export function useAddonLoader() {
 export function useAddonWidgets(slot: string): AddonWidgetEntry[] {
     const { widgets } = useAddonLoader();
     const { hasPerm } = useAdminPerms();
-    return widgets.filter(w => w.slot === slot && (!w.permission || hasPerm(w.permission)));
+    return widgets.filter((w) => w.slot === slot && (!w.permission || hasPerm(w.permission)));
 }
 
 /**
@@ -498,7 +508,7 @@ export function useAddonWidgets(slot: string): AddonWidgetEntry[] {
 export function useAddonWidgetsByPrefix(prefix: string): AddonWidgetEntry[] {
     const { widgets } = useAddonLoader();
     const { hasPerm } = useAdminPerms();
-    return widgets.filter(w => w.slot.startsWith(prefix) && (!w.permission || hasPerm(w.permission)));
+    return widgets.filter((w) => w.slot.startsWith(prefix) && (!w.permission || hasPerm(w.permission)));
 }
 
 /**
@@ -506,7 +516,7 @@ export function useAddonWidgetsByPrefix(prefix: string): AddonWidgetEntry[] {
  */
 export function useAddonSettings(addonId: string): React.ComponentType<any> | undefined {
     const { addons } = useAddonLoader();
-    const addon = addons.find(a => a.descriptor.id === addonId);
+    const addon = addons.find((a) => a.descriptor.id === addonId);
     return addon?.module.settings;
 }
 

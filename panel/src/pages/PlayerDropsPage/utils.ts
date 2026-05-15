@@ -25,29 +25,36 @@ export const processResourceChanges = (
 
     const removedNames = new Set(removedResources.map((res) => res.name));
     const addedNames = new Set(addedResources.map((res) => res.name));
+    const addedResourceByName = new Map(addedResources.map((resource) => [resource.name, resource]));
 
-    const removedOnly = removedResources
-        .filter((res) => !addedNames.has(res.name))
-        .map((res) => (res?.version ? `${res.name}/${res.version}` : res.name));
-    const addedOnly = addedResources
-        .filter((res) => !removedNames.has(res.name))
-        .map((res) => (res?.version ? `${res.name}/${res.version}` : res.name));
+    const removedOnly: string[] = [];
+    const addedOnly: string[] = [];
+    const updated: PackageChange[] = [];
 
-    const updated = removedResources
-        .filter((res) => addedNames.has(res.name))
-        .map((res) => {
-            const newRes = addedResources.find((newRes) => newRes.name === res.name);
-            return {
-                resName: res.name,
-                oldVer: res.version ?? '???',
-                newVer: newRes?.version ?? '???',
-            };
+    for (const resource of removedResources) {
+        if (!addedNames.has(resource.name)) {
+            removedOnly.push(resource.version ? `${resource.name}/${resource.version}` : resource.name);
+            continue;
+        }
+
+        const newResource = addedResourceByName.get(resource.name);
+        updated.push({
+            resName: resource.name,
+            oldVer: resource.version ?? '???',
+            newVer: newResource?.version ?? '???',
         });
+    }
+
+    for (const resource of addedResources) {
+        if (!removedNames.has(resource.name)) {
+            addedOnly.push(resource.version ? `${resource.name}/${resource.version}` : resource.name);
+        }
+    }
 
     return {
         removed: removedOnly,
         added: addedOnly,
-        updated: updated,
+        updated,
     };
 };
 
@@ -123,7 +130,26 @@ export const compressMultipleCounter = (
             filteredOut: false as const,
         };
     }
-    const cutoff = data.map(([_, count]) => count).sort((a, b) => b - a)[targetLength - 1];
+
+    const topCounts: number[] = [];
+    for (const [, count] of data) {
+        let insertIndex = topCounts.length;
+        for (let i = 0; i < topCounts.length; i++) {
+            if (count > topCounts[i]) {
+                insertIndex = i;
+                break;
+            }
+        }
+        if (insertIndex >= targetLength) {
+            continue;
+        }
+
+        topCounts.splice(insertIndex, 0, count);
+        if (topCounts.length > targetLength) {
+            topCounts.pop();
+        }
+    }
+    const cutoff = topCounts[targetLength - 1] ?? topCounts[topCounts.length - 1] ?? 0;
 
     let filteredOutTypes = 0;
     let filteredOutCounts = 0;

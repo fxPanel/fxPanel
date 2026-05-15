@@ -1,8 +1,13 @@
 const modulename = 'WebServer:SessionMws';
 import fs from 'node:fs';
-import type { CfxreSessAuthType, DiscordSessAuthType, PassSessAuthType, Pending2faSessAuthType } from '../authLogic';
+import type {
+    CfxreSessAuthType,
+    DiscordSessAuthType,
+    PassSessAuthType,
+    Pending2faSessAuthType,
+} from '@modules/WebServer/authLogic';
 import { LRUCacheWithDelete } from 'mnemonist';
-import { RawKoaCtx } from '../ctxTypes';
+import { RawKoaCtx } from '@modules/WebServer/ctxTypes';
 import { Next } from 'koa';
 import { randomUUID } from 'node:crypto';
 import { Socket } from 'socket.io';
@@ -154,7 +159,11 @@ export class SessionMemoryStorage {
             fs.writeFileSync(this.persistFilePath, JSON.stringify(entries), { mode: 0o600 });
             // Best-effort tighten perms on existing file (writeFileSync mode only
             // applies on create; chmod for updates).
-            try { fs.chmodSync(this.persistFilePath, 0o600); } catch { /* ignore */ }
+            try {
+                fs.chmodSync(this.persistFilePath, 0o600);
+            } catch {
+                /* ignore */
+            }
             console.verbose.debug(
                 `Persisted ${entries.length} sessions to disk (dropped ${droppedSensitive} password-authenticated).`,
             );
@@ -226,10 +235,16 @@ const isValidSessId = (sessId: string) => {
     return uuidV4Regex.test(sessId);
 };
 
+type SessMwCtx = RawKoaCtx & {
+    _refreshSessionCookieId?: string;
+    _migrateClearLegacy?: string;
+};
+
 /**
  * Middleware factory to add sessTools to the koa context.
+ * When `legacyCookieName` is set, reads legacy `tx:*` cookies and migrates to `fxp:*` on the response.
  */
-export const koaSessMw = (cookieName: string, store: SessionMemoryStorage) => {
+export const koaSessMw = (cookieName: string, store: SessionMemoryStorage, legacyCookieName?: string) => {
     // Determine if we should use secure cookies
     // Enable secure cookies if explicitly configured or in production
     const isSecureEnabled = txConfig.webServer.useSecureCookies || process.env.NODE_ENV === 'production';
@@ -251,44 +266,84 @@ export const koaSessMw = (cookieName: string, store: SessionMemoryStorage) => {
 
     //Middleware
     return async (ctx: RawKoaCtx, next: Next) => {
+        const c = ctx as SessMwCtx;
+
         const sessGet = () => {
-            const sessId = ctx.cookies.get(cookieName);
-            if (!sessId || !isValidSessId(sessId)) return;
-            const stored = store.get(sessId);
-            if (!stored) return;
-            ctx._refreshSessionCookieId = sessId;
-            return stored;
+            const tryId = (sessId: string | undefined) => {
+                if (!sessId || !isValidSessId(sessId)) return undefined;
+                const stored = store.get(sessId);
+                return stored ? { stored, sessId } : undefined;
+            };
+
+            const primaryId = ctx.cookies.get(cookieName);
+            const fromPrimary = tryId(primaryId);
+            if (fromPrimary) {
+                c._refreshSessionCookieId = fromPrimary.sessId;
+                return fromPrimary.stored;
+            }
+            if (!legacyCookieName) return;
+            const legacyId = ctx.cookies.get(legacyCookieName);
+            const fromLegacy = tryId(legacyId);
+            if (!fromLegacy) return;
+            c._refreshSessionCookieId = fromLegacy.sessId;
+            c._migrateClearLegacy = legacyCookieName;
+            return fromLegacy.stored;
         };
 
         const sessSet = (sess: ValidSessionType) => {
-            const sessId = ctx.cookies.get(cookieName);
+            let sessId = ctx.cookies.get(cookieName);
+            if ((!sessId || !isValidSessId(sessId)) && legacyCookieName) {
+                const leg = ctx.cookies.get(legacyCookieName);
+                if (leg && isValidSessId(leg)) sessId = leg;
+            }
             if (!sessId || !isValidSessId(sessId)) {
                 const newSessId = randomUUID();
                 ctx.cookies.set(cookieName, newSessId, cookieOptions);
                 store.set(newSessId, sess);
+                if (legacyCookieName) {
+                    ctx.cookies.set(legacyCookieName, '', { ...cookieOptions, maxAge: 0 });
+                }
             } else {
                 store.set(sessId, sess);
+                c._refreshSessionCookieId = sessId;
+                if (legacyCookieName && ctx.cookies.get(legacyCookieName) === sessId) {
+                    c._migrateClearLegacy = legacyCookieName;
+                }
             }
         };
 
         const sessRegenerate = (sess: ValidSessionType) => {
-            // Destroy the old session (if any) and issue a brand-new id.
-            const oldId = ctx.cookies.get(cookieName);
+            let oldId = ctx.cookies.get(cookieName);
+            if ((!oldId || !isValidSessId(oldId)) && legacyCookieName) {
+                const leg = ctx.cookies.get(legacyCookieName);
+                if (leg && isValidSessId(leg)) oldId = leg;
+            }
             if (oldId && isValidSessId(oldId)) {
                 store.destroy(oldId);
             }
             const newSessId = randomUUID();
             ctx.cookies.set(cookieName, newSessId, cookieOptions);
             store.set(newSessId, sess);
-            // Prevent the finally block from refreshing the stale old id
-            ctx._refreshSessionCookieId = undefined;
+            if (legacyCookieName) {
+                ctx.cookies.set(legacyCookieName, '', { ...cookieOptions, maxAge: 0 });
+            }
+            c._refreshSessionCookieId = undefined;
+            c._migrateClearLegacy = undefined;
         };
 
         const sessDestroy = () => {
-            const sessId = ctx.cookies.get(cookieName);
-            if (!sessId || !isValidSessId(sessId)) return;
-            store.destroy(sessId);
+            const primary = ctx.cookies.get(cookieName);
+            const legacy = legacyCookieName ? ctx.cookies.get(legacyCookieName) : undefined;
+            const ids = new Set<string>();
+            if (primary && isValidSessId(primary)) ids.add(primary);
+            if (legacy && isValidSessId(legacy)) ids.add(legacy);
+            for (const id of ids) {
+                store.destroy(id);
+            }
             ctx.cookies.set(cookieName, '', { ...cookieOptions, maxAge: 0 });
+            if (legacyCookieName) {
+                ctx.cookies.set(legacyCookieName, '', { ...cookieOptions, maxAge: 0 });
+            }
         };
 
         ctx.sessTools = {
@@ -301,9 +356,13 @@ export const koaSessMw = (cookieName: string, store: SessionMemoryStorage) => {
         try {
             await next();
         } finally {
-            if (typeof ctx._refreshSessionCookieId === 'string') {
-                ctx.cookies.set(cookieName, ctx._refreshSessionCookieId, cookieOptions);
-                store.refresh(ctx._refreshSessionCookieId);
+            if (typeof c._refreshSessionCookieId === 'string') {
+                ctx.cookies.set(cookieName, c._refreshSessionCookieId, cookieOptions);
+                store.refresh(c._refreshSessionCookieId);
+            }
+            if (c._migrateClearLegacy) {
+                ctx.cookies.set(c._migrateClearLegacy, '', { ...cookieOptions, maxAge: 0 });
+                c._migrateClearLegacy = undefined;
             }
         }
     };
@@ -317,7 +376,12 @@ export const koaSessMw = (cookieName: string, store: SessionMemoryStorage) => {
  *  the authLogic only needs to get the cookie, and the webAuthMw only destroys it
  *  and webSocket.handleConnection() just drops if authLogic fails.
  */
-export const socketioSessMw = (cookieName: string, store: SessionMemoryStorage, cookieKeys: string[]) => {
+export const socketioSessMw = (
+    cookieName: string,
+    store: SessionMemoryStorage,
+    cookieKeys: string[],
+    legacyCookieName?: string,
+) => {
     if (!Array.isArray(cookieKeys) || !cookieKeys.length) {
         throw new Error('socketioSessMw: cookieKeys must be a non-empty array');
     }
@@ -327,11 +391,14 @@ export const socketioSessMw = (cookieName: string, store: SessionMemoryStorage, 
             const cookiesString = socket?.handshake?.headers?.cookie;
             if (typeof cookiesString !== 'string') return;
             const cookies = cookieParse(cookiesString);
-            const sessId = cookies[cookieName];
-            if (!sessId || !isValidSessId(sessId)) return;
-            const sig = cookies[`${cookieName}.sig`];
-            if (!sig || !keygrip.verify(`${cookieName}=${sessId}`, sig)) return;
-            return store.get(sessId);
+            const tryOne = (name: string) => {
+                const sessId = cookies[name];
+                if (!sessId || !isValidSessId(sessId)) return undefined;
+                const sig = cookies[`${name}.sig`];
+                if (!sig || !keygrip.verify(`${name}=${sessId}`, sig)) return undefined;
+                return store.get(sessId);
+            };
+            return tryOne(cookieName) ?? (legacyCookieName ? tryOne(legacyCookieName) : undefined);
         };
 
         socket.sessTools = {

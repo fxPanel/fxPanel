@@ -34,7 +34,7 @@ function CrashTypeRow({ datum, isLast, isOdd }: CrashTypeRowProps) {
         <tr
             className={cn(
                 'group font-mono text-sm',
-                !isLast && 'border-b border-border/30',
+                !isLast && 'border-border/30 border-b',
                 isOdd && 'bg-secondary/15',
                 'hover:bg-secondary/25 transition-colors',
             )}
@@ -63,23 +63,23 @@ export default function DrilldownCrashesSubcard({
     crashesTargetLimit,
     setCrashesTargetLimit,
 }: DrilldownCrashesSubcardProps) {
-    if (!crashTypes.length) {
-        return <PlayerDropsMessage message="No player crashes within this time window." />;
-    }
-
     const crashesData = useMemo(() => {
-        //Sort the data - the default api sort is by count (NOTE: we are mutating the array)
+        if (!crashTypes.length) return null;
+
+        const sortedCrashTypes = [...crashTypes];
+
+        // Sort the data - the default api sort is by count.
         if (crashesGroupReasons) {
-            crashTypes.sort((a, b) => a[0].localeCompare(b[0]));
+            sortedCrashTypes.sort((a, b) => a[0].localeCompare(b[0]));
         } else {
-            crashTypes.sort((a, b) => b[1] - a[1]);
+            sortedCrashTypes.sort((a, b) => b[1] - a[1]);
         }
 
-        //Calculate the total crashes and compress the data
-        const totalCrashes = crashTypes.reduce((acc, [, cnt]) => acc + cnt, 0);
+        // Calculate the total crashes and compress the data.
+        const totalCrashes = sortedCrashTypes.reduce((acc, [, cnt]) => acc + cnt, 0);
         const { filteredIn, filteredOut } = crashesTargetLimit
-            ? compressMultipleCounter(crashTypes, crashesTargetLimit, crashesGroupReasons)
-            : { filteredIn: crashTypes, filteredOut: false as const };
+            ? compressMultipleCounter(sortedCrashTypes, crashesTargetLimit, crashesGroupReasons)
+            : { filteredIn: sortedCrashTypes, filteredOut: false as const };
         const processedStrings = splitPrefixedStrings(filteredIn.map(([str, cnt]) => str));
 
         //Prepare the display data
@@ -104,13 +104,17 @@ export default function DrilldownCrashesSubcard({
                 countPct: numberToLocaleString((filteredOut.count / totalCrashes) * 100, 1) + '%',
             },
         };
-    }, [crashTypes, crashesGroupReasons, crashesTargetLimit, setCrashesTargetLimit]);
+    }, [crashTypes, crashesGroupReasons, crashesTargetLimit]);
+
+    if (!crashesData) {
+        return <PlayerDropsMessage message="No player crashes within this time window." />;
+    }
 
     return (
         <div className="w-full overflow-x-auto">
             <table className="w-full min-w-lg">
                 <thead>
-                    <tr className="text-muted-foreground/75 border-b border-border/40">
+                    <tr className="text-muted-foreground/75 border-border/40 border-b">
                         <th className="min-w-[4ch] border-r px-2 py-1 text-right">%</th>
                         <th className="min-w-[4ch] border-r px-2 py-1 text-right">Count</th>
                         <th className="px-2 py-1">Crash Reason</th>

@@ -31,7 +31,7 @@ export default function PermissionsEditor({ selected, onChange, disabled }: Perm
     };
 
     const toggleCategory = (perms: PermissionDefinition[]) => {
-        const ids = perms.map((p) => p.id).filter((id) => id !== 'all_permissions');
+        const ids = perms.flatMap((permission) => (permission.id === 'all_permissions' ? [] : [permission.id]));
         const allChecked = ids.every((id) => selected.includes(id));
         if (allChecked) {
             onChange(selected.filter((p) => !ids.includes(p)));
@@ -61,23 +61,22 @@ export default function PermissionsEditor({ selected, onChange, disabled }: Perm
         return result;
     }, []);
 
-    const filteredCategories = allCategories
-        .map((cat) => ({
-            ...cat,
-            permissions: cat.permissions.filter(
-                (p) =>
-                    !searchLower ||
-                    p.label.toLowerCase().includes(searchLower) ||
-                    p.description.toLowerCase().includes(searchLower) ||
-                    p.id.toLowerCase().includes(searchLower),
-            ),
-        }))
-        .filter((cat) => cat.permissions.length > 0);
+    const filteredCategories = allCategories.flatMap((category) => {
+        const permissions = category.permissions.filter(
+            (permission) =>
+                !searchLower ||
+                permission.label.toLowerCase().includes(searchLower) ||
+                permission.description.toLowerCase().includes(searchLower) ||
+                permission.id.toLowerCase().includes(searchLower),
+        );
+
+        return permissions.length > 0 ? [{ ...category, permissions }] : [];
+    });
 
     return (
         <div className="space-y-3">
             <div className="relative">
-                <SearchIcon className="text-muted-foreground absolute top-2.5 left-2.5 h-4 w-4" />
+                <SearchIcon className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
                 <Input
                     placeholder="Search permissions..."
                     value={search}
@@ -88,7 +87,9 @@ export default function PermissionsEditor({ selected, onChange, disabled }: Perm
 
             <div className="space-y-4">
                 {filteredCategories.map((cat) => {
-                    const catIds = cat.permissions.map((p) => p.id).filter((id) => id !== 'all_permissions');
+                    const catIds = cat.permissions.flatMap((permission) =>
+                        permission.id === 'all_permissions' ? [] : [permission.id],
+                    );
                     const catAllChecked = catIds.length > 0 && catIds.every((id) => selected.includes(id));
                     const catSomeChecked = catIds.some((id) => selected.includes(id));
 
@@ -110,12 +111,14 @@ export default function PermissionsEditor({ selected, onChange, disabled }: Perm
                                 {cat.permissions.map((perm) => (
                                     <label
                                         key={perm.id}
+                                        htmlFor={`${cat.id}-${perm.id}`}
                                         className={cn(
                                             'hover:bg-muted/60 flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 transition-colors select-none',
                                             disabled && 'pointer-events-none opacity-50',
                                         )}
                                     >
                                         <Checkbox
+                                            id={`${cat.id}-${perm.id}`}
                                             checked={hasAll || selected.includes(perm.id)}
                                             onCheckedChange={() => toggle(perm.id)}
                                             disabled={disabled || (hasAll && perm.id !== 'all_permissions')}

@@ -69,7 +69,7 @@ export default function PresetEditDialog({ target, onClose, onSave, isSaving }: 
                         Cancel
                     </Button>
                     <Button onClick={handleSave} disabled={isSaving}>
-                        {isSaving && <Loader2Icon className="mr-1.5 h-4 w-4 animate-spin" />}
+                        {isSaving && <Loader2Icon className="mr-1.5 size-4 animate-spin" />}
                         {isNew ? 'Create Preset' : 'Save Preset'}
                     </Button>
                 </DialogFooter>

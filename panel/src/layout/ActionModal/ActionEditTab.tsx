@@ -39,7 +39,7 @@ export default function ActionEditTab({ action, refreshModalData }: ActionEditTa
         setIsChangingDuration(true);
         changeDurationApi({
             data: { actionId: action.id, duration },
-            toastLoadingMessage: 'Changing ban duration...',
+            toastLoadingMessage: 'Changing ban duration…',
             genericHandler: {
                 successMsg: 'Ban duration changed.',
             },
@@ -128,7 +128,7 @@ export default function ActionEditTab({ action, refreshModalData }: ActionEditTa
                         >
                             {isChangingDuration ? (
                                 <span className="flex items-center leading-relaxed">
-                                    <Loader2Icon className="inline h-4 animate-spin" /> Changing...
+                                    <Loader2Icon className="inline h-4 animate-spin" /> Changing…
                                 </span>
                             ) : hasBanPerm ? (
                                 'Change Duration'

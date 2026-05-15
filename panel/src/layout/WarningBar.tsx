@@ -17,9 +17,8 @@ const getTsUpdateDismissed = () => {
     return parsed;
 };
 
-const checkPostponeStatus = (isImportant: boolean) => {
+const checkPostponeStatus = (isImportant: boolean, tsNow = Date.now()) => {
     const tsLastDismissal = getTsUpdateDismissed();
-    const tsNow = Date.now();
     const maxTime = isImportant ? MAJOR_DISMISSAL_TIME : MINOR_DISMISSAL_TIME;
     if (!tsLastDismissal || tsLastDismissal + maxTime < tsNow) {
         return true;
@@ -36,7 +35,7 @@ type InnerWarningBarProps = {
     canHidePermanently?: boolean;
 };
 
-export function InnerWarningBar({
+function InnerWarningBar({
     titleIcon,
     title,
     description,
@@ -44,27 +43,25 @@ export function InnerWarningBar({
     canPostpone,
     canHidePermanently,
 }: InnerWarningBarProps) {
-    const [rand, setRand] = useState(0);
+    const [nowMs, setNowMs] = useState(() => Date.now());
 
-    const forceRerender = () => {
-        setRand(Math.random());
+    const refreshPostponeStatus = () => {
+        setNowMs(Date.now());
     };
 
     const postponeUpdate = () => {
         localStorage.setItem(LOCALSTORAGE_KEY, Date.now().toString());
-        forceRerender();
+        refreshPostponeStatus();
     };
 
     useEffect(() => {
         const interval = setInterval(() => {
-            forceRerender();
+            refreshPostponeStatus();
         }, 60_000);
         return () => clearInterval(interval);
     }, []);
 
-    if (canPostpone && !checkPostponeStatus(isImportant)) return null;
-    if (canHidePermanently && window.txConsts.hideFxsUpdateNotification) return null;
-    return (
+    return canPostpone && !checkPostponeStatus(isImportant, nowMs) ? null : canHidePermanently && window.txConsts.hideFxsUpdateNotification ? null : (
         <div className="top-navbarvh fixed z-40 flex w-full justify-center">
             <div
                 className={cn(
@@ -93,23 +90,13 @@ export function InnerWarningBar({
                             </Button>
                         )}
 
-                        <Button
-                            size="xs"
-                            variant="outline"
-                            asChild
-                            className="border-current hover:bg-white/10"
-                        >
+                        <Button size="xs" variant="outline" asChild className="border-current hover:bg-white/10">
                             <a href="https://github.com/SomeAussieGaymer/fxPanel/releases" target="_blank">
                                 <FaGithub size="14" className="mr-1" /> Download
                             </a>
                         </Button>
 
-                        <Button
-                            size="xs"
-                            variant="outline"
-                            asChild
-                            className="border-current hover:bg-white/10"
-                        >
+                        <Button size="xs" variant="outline" asChild className="border-current hover:bg-white/10">
                             <a href="https://discord.gg/6FcqBYwxH5" target="_blank">
                                 <FaDiscord size="14" className="mr-1" /> Support
                             </a>

@@ -21,7 +21,7 @@ const totpAdmin = new StoredAdmin({
 });
 
 vi.stubGlobal('txEnv', {
-    txaVersion: '0.2.1-Beta',
+    txaVersion: '0.3.0-Beta',
 });
 
 vi.stubGlobal('txCore', {
@@ -122,7 +122,12 @@ suite('AuthVerifyPassword', () => {
         await AuthVerifyPassword(ctx);
         expect(sentData[0]).toMatchObject({ name: 'admin', isMaster: true });
         expect(ctx.sessTools.regenerate).toHaveBeenCalled();
-        expect(txCore.logger.system.write).toHaveBeenCalledWith('admin', expect.stringContaining('logged in'), 'login');
+        expect(txCore.logger.system.write).toHaveBeenCalledWith(
+            'admin',
+            expect.stringContaining('logged in'),
+            'login',
+            expect.objectContaining({ actionId: 'login.password' }),
+        );
     });
 
     it('should require TOTP for 2FA-enabled admin', async () => {

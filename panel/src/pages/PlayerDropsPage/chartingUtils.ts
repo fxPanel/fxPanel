@@ -1,9 +1,11 @@
 import { PlayerDropsSummaryHour } from '@shared/otherTypes';
 import { playerDropExpectedCategories, playerDropUnexpectedCategories } from '@/lib/playerDropCategories';
-import { TimelineDropsDatum } from './drawDropsTimeline';
-import { DisplayLodType } from './PlayerDropsPage';
+import { TimelineDropsDatum } from '@/pages/PlayerDropsPage/drawDropsTimeline';
+import { DisplayLodType } from '@/pages/PlayerDropsPage/PlayerDropsPage';
 
 export type PlayerDropsCategoryCount = [category: string, count: number];
+
+const expectedDropCategorySet = new Set(playerDropExpectedCategories);
 
 /**
  * Processes the player drops summary api data to return the data for the timeline chart.
@@ -51,16 +53,11 @@ export const processDropsSummary = (
 
             //Merge the data
             currDayData.changes += hourData.changes;
-            for (const [catName, catCount] of hourData.dropTypes.slice()) {
-                const currCatCount = currDayData.dropTypes.find(
-                    ([currCatName]: [string, number]) => currCatName === catName,
-                );
-                if (currCatCount) {
-                    currCatCount[1] += catCount;
-                } else {
-                    currDayData.dropTypes.push([catName, catCount]);
-                }
+            const currDropTypeMap = new Map(currDayData.dropTypes);
+            for (const [catName, catCount] of hourData.dropTypes) {
+                currDropTypeMap.set(catName, (currDropTypeMap.get(catName) ?? 0) + catCount);
             }
+            currDayData.dropTypes = Array.from(currDropTypeMap.entries());
         }
         //Push the last day
         if (currDayData) binnedData.push(currDayData);
@@ -78,7 +75,7 @@ export const processDropsSummary = (
         let intervalExpectedTotalDrops = 0;
         let intervalUnexpectedTotalDrops = 0;
         for (const [catName, catCount] of intervalData.dropTypes) {
-            if (playerDropExpectedCategories.includes(catName)) {
+            if (expectedDropCategorySet.has(catName)) {
                 intervalExpectedTotalDrops += catCount;
                 expectedDrops.push([catName, catCount]);
                 expectedCategoriesDropsTotal[catName] += catCount;

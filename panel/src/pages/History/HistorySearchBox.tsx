@@ -46,7 +46,7 @@ export const SEARCH_ANY_STRING = '!any';
 
 //FIXME: this doesn't require exporting, but HMR doesn't work without it
 // eslint-disable-next-line react-refresh/only-export-components
-export const throttleFunc = throttle(
+const throttleFunc = throttle(
     1250,
     (func: any) => {
         func();
@@ -79,11 +79,11 @@ type HistorySearchBoxProps = {
 export function HistorySearchBox({ doSearch, initialState, adminStats }: HistorySearchBoxProps) {
     const { authData } = useAuth();
     const inputRef = useRef<HTMLInputElement>(null);
-    const [isSearchTypeDropdownOpen, setSearchTypeDropdownOpen] = useState(false);
-    const [currSearchType, setCurrSearchType] = useState<string>(initialState.search.type);
-    const [hasSearchText, setHasSearchText] = useState(!!initialState.search.value);
-    const [typeFilter, setTypeFilter] = useState(initialState.filterByType);
-    const [adminNameFilter, setAdminNameFilter] = useState(initialState.filterByAdmin);
+    const initialStateRef = useRef(initialState);
+    const [currSearchType, setCurrSearchType] = useState<string>(initialStateRef.current.search.type);
+    const [hasSearchText, setHasSearchText] = useState(!!initialStateRef.current.search.value);
+    const [typeFilter, setTypeFilter] = useState(initialStateRef.current.filterByType);
+    const [adminNameFilter, setAdminNameFilter] = useState(initialStateRef.current.filterByAdmin);
     const authName = authData && typeof authData === 'object' ? authData.name : undefined;
 
     const updateSearch = useCallback(() => {
@@ -138,12 +138,11 @@ export function HistorySearchBox({ doSearch, initialState, adminStats }: History
                 <div className="relative min-w-44 grow">
                     <Input
                         type="text"
-                        autoFocus
                         autoCapitalize="off"
                         autoCorrect="off"
                         ref={inputRef}
                         placeholder={selectedSearchType.placeholder}
-                        defaultValue={initialState.search.value}
+                        defaultValue={initialStateRef.current.search.value}
                         onKeyDown={handleInputKeyDown}
                     />
                     {hasSearchText && (
@@ -161,13 +160,10 @@ export function HistorySearchBox({ doSearch, initialState, adminStats }: History
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="outline"
-                                role="combobox"
-                                aria-expanded={isSearchTypeDropdownOpen}
-                                onClick={() => setSearchTypeDropdownOpen(!isSearchTypeDropdownOpen)}
                                 className="xs:w-48 grow justify-between md:grow-0"
                             >
                                 Search by {selectedSearchType.label}
-                                <ChevronsUpDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                <ChevronsUpDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className="w-48">
@@ -233,12 +229,12 @@ export function HistorySearchBox({ doSearch, initialState, adminStats }: History
                             <DropdownMenuTrigger asChild>
                                 <Button variant="outline" className="grow md:grow-0">
                                     More
-                                    <ChevronDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    <ChevronDownIcon className="ml-2 size-4 shrink-0 opacity-50" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent>
                                 <DropdownMenuItem className="h-10 py-2 pr-2 pl-1" asChild>
-                                    <Link href="/system/master-actions#cleandb" className="cursor-pointer">
+                                    <Link href="/settings#danger-zone" className="cursor-pointer">
                                         <ExternalLinkIcon className="mr-1 inline h-4" />
                                         Bulk Remove
                                     </Link>

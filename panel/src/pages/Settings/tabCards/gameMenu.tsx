@@ -10,6 +10,7 @@ import {
     getPageConfig,
     configsReducer,
     getConfigDiff,
+    reconcileCardPendingSave,
 } from '../utils';
 import SettingsCardShell from '../SettingsCardShell';
 
@@ -17,7 +18,7 @@ export const pageConfigs = {
     menuEnabled: getPageConfig('gameFeatures', 'menuEnabled', undefined, true),
     alignRight: getPageConfig('gameFeatures', 'menuAlignRight', undefined, false),
     pageKey: getPageConfig('gameFeatures', 'menuPageKey'),
-    playerModePtfx: getPageConfig('gameFeatures', 'playerModePtfx', undefined, true),
+    playerModePtfx: getPageConfig('gameFeatures', 'playerModePtfx', true, true),
 } as const;
 
 export default function ConfigCardGameMenu({ cardCtx, pageCtx }: SettingsCardProps) {
@@ -43,7 +44,7 @@ export default function ConfigCardGameMenu({ cardCtx, pageCtx }: SettingsCardPro
         const overwrites = {};
 
         const res = getConfigDiff(cfg, states, overwrites, showAdvanced);
-        pageCtx.setCardPendingSave(res.hasChanges ? cardCtx : null);
+        pageCtx.setCardPendingSave(reconcileCardPendingSave(cardCtx, res.hasChanges));
         return res;
     };
 

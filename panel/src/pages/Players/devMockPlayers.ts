@@ -60,9 +60,7 @@ const makePlayer = (idx: number): PlayersTablePlayerType => {
     const joinDaysAgo = 2 + ((id * 17) % 220);
     const joinedAt = now - joinDaysAgo * 24 * 60 * 60 * 1000 - ((id * 193) % (20 * 60 * 60 * 1000));
     const online = id % 3 !== 0;
-    const lastConnection = online
-        ? now - ((id * 41) % (25 * 60 * 1000))
-        : now - (1 + ((id * 9) % 12)) * 60 * 60 * 1000;
+    const lastConnection = online ? now - ((id * 41) % (25 * 60 * 1000)) : now - (1 + ((id * 9) % 12)) * 60 * 60 * 1000;
     const playTimeMinutes = clamp(joinDaysAgo * (25 + (id % 90)), 120, 58_000);
     const isAdmin = id % 23 === 0;
     const isWhitelisted = id % 4 !== 0;
@@ -112,8 +110,10 @@ const filterBySearch = (players: PlayersTablePlayerType[], searchValue: string, 
     if (searchType === 'playerIds') {
         const ids = query
             .split(/[\s,]+/)
-            .map((id) => id.trim())
-            .filter(Boolean);
+            .flatMap((id) => {
+                const trimmedId = id.trim();
+                return trimmedId ? [trimmedId] : [];
+            });
         if (!ids.length) return players;
 
         return players.filter((p) => {
@@ -123,7 +123,9 @@ const filterBySearch = (players: PlayersTablePlayerType[], searchValue: string, 
             const discord = Number.isNaN(parsed)
                 ? ''
                 : `discord:${(900000000000000000n + BigInt(parsed)).toString()}`.toLowerCase();
-            const idSet = [normalizedLicense, discord, p.displayName.toLowerCase()].filter(Boolean);
+            const idSet = [normalizedLicense, discord, p.displayName.toLowerCase()].flatMap((id) =>
+                id ? [id] : [],
+            );
             return ids.some((needle) => idSet.some((id) => id.includes(needle)));
         });
     }
@@ -133,7 +135,14 @@ const filterBySearch = (players: PlayersTablePlayerType[], searchValue: string, 
 
 const filterByFlags = (players: PlayersTablePlayerType[], filtersCsv?: string) => {
     if (!filtersCsv?.length) return players;
-    const filters = new Set(filtersCsv.split(',').map((f) => f.trim()).filter(Boolean));
+    const filters = new Set(
+        filtersCsv
+            .split(',')
+            .flatMap((filterValue) => {
+                const trimmedFilter = filterValue.trim();
+                return trimmedFilter ? [trimmedFilter] : [];
+            }),
+    );
 
     return players.filter((p) => {
         if (filters.has('isAdmin') && !p.isAdmin) return false;
@@ -147,7 +156,7 @@ const filterByFlags = (players: PlayersTablePlayerType[], filtersCsv?: string) =
 };
 
 const sortPlayers = (players: PlayersTablePlayerType[], sorting: PlayersTableSortingType) => {
-    const sorted = [...players].sort((a, b) => {
+    const sorted = players.toSorted((a, b) => {
         const aVal = a[sorting.key];
         const bVal = b[sorting.key];
         if (aVal === bVal) {
@@ -180,10 +189,15 @@ export const searchMockPlayers = async (queryParams: {
     filters?: string | number | boolean;
     offsetLicense?: string | number | boolean;
 }): Promise<PlayersTableSearchResp> => {
-    const allowedSortingKeys: ReadonlyArray<PlayersTableSortingType['key']> = ['playTime', 'tsJoined', 'tsLastConnection'];
+    const allowedSortingKeys: ReadonlyArray<PlayersTableSortingType['key']> = [
+        'playTime',
+        'tsJoined',
+        'tsLastConnection',
+    ];
     const requestedSortingKey = queryParams.sortingKey;
     const sortingKey: PlayersTableSortingType['key'] =
-        typeof requestedSortingKey === 'string' && (allowedSortingKeys as readonly string[]).includes(requestedSortingKey)
+        typeof requestedSortingKey === 'string' &&
+        (allowedSortingKeys as readonly string[]).includes(requestedSortingKey)
             ? (requestedSortingKey as PlayersTableSortingType['key'])
             : 'tsJoined';
     const sorting: PlayersTableSortingType = {

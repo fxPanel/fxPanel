@@ -9,12 +9,13 @@ import MainShell from './layout/MainShell.tsx';
 import { AppErrorFallback } from './components/ErrorFallback.tsx';
 import { logoutWatcher, useIsAuthenticated } from './hooks/auth.ts';
 import AuthShell from './layout/AuthShell.tsx';
-import { isValidRedirectPath, redirectToLogin } from '@/lib/navigation';
+import { buildLoginRedirectPath, isValidRedirectPath } from '@/lib/navigation';
 import ThemeProvider from './components/ThemeProvider.tsx';
-import { StrictMode, useEffect } from 'react';
+import { StrictMode } from 'react';
 import { isMobile } from 'is-mobile';
 import { useAtomValue } from 'jotai';
 import { pageTitleWatcher } from './hooks/pages.ts';
+import { Redirect, useLocation } from 'wouter';
 
 //If inside NUI, silence console.* calls to prevent confusion.
 if (!window.txConsts.isWebInterface) {
@@ -69,37 +70,47 @@ export function AuthContextSwitch() {
     useAtomValue(logoutWatcher);
     useAtomValue(pageTitleWatcher);
     const isAuthenticated = useIsAuthenticated();
+    // Subscribe to wouter location so we re-render after <Redirect> updates the URL
+    // (reading window.location alone does not trigger an update, which left a blank screen after login).
+    const [pathname] = useLocation();
+    const redirectPath = new URLSearchParams(window.location.search).get('r');
 
-    useEffect(() => {
-        if (isAuthenticated) {
-            //Replace the current URL with the redirect path if it exists and is valid
-            const urlParams = new URLSearchParams(window.location.search);
-            const redirectPath = urlParams.get('r');
-            if (redirectPath) {
-                if (isValidRedirectPath(redirectPath)) {
-                    window.history.replaceState(null, '', redirectPath);
-                } else {
-                    window.history.replaceState(null, '', '/');
-                }
-            } else if (isAuthRoute(window.location.pathname)) {
-                window.history.replaceState(null, '', '/');
-            }
-        } else {
-            //Unless the user is already in the auth pages, redirect to the login page
-            if (!window.txConsts.hasMasterAccount && !window.location.pathname.startsWith('/addMaster')) {
-                console.log('No master account detected. Redirecting to addMaster page.');
-                window.history.replaceState(null, '', '/addMaster/pin');
-            } else if (!isAuthRoute(window.location.pathname)) {
-                console.log('User is not authenticated. Redirecting to login page.');
-                redirectToLogin();
-            }
+    if (isAuthenticated) {
+        if (redirectPath) {
+            return <Redirect to={isValidRedirectPath(redirectPath) ? redirectPath : '/'} replace />;
         }
-    }, [isAuthenticated]);
+        if (isAuthRoute(pathname)) {
+            return <Redirect to="/" replace />;
+        }
+    } else {
+        if (!window.txConsts.hasMasterAccount && !pathname.startsWith('/addMaster')) {
+            console.log('No master account detected. Redirecting to addMaster page.');
+            return <Redirect to="/addMaster/pin" replace />;
+        }
+        if (!isAuthRoute(pathname)) {
+            console.log('User is not authenticated. Redirecting to login page.');
+            return <Redirect to={buildLoginRedirectPath()} replace />;
+        }
+    }
 
     return isAuthenticated ? <MainShell /> : <AuthShell />;
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+type AppRootWindow = Window & {
+    txReactRoot?: ReturnType<typeof ReactDOM.createRoot>;
+};
+
+const rootContainer = document.getElementById('root');
+
+if (!rootContainer) {
+    throw new Error('Root container #root not found');
+}
+
+const rootWindow = window as AppRootWindow;
+const root = rootWindow.txReactRoot ?? ReactDOM.createRoot(rootContainer);
+rootWindow.txReactRoot = root;
+
+root.render(
     <StrictMode>
         <ErrorBoundary FallbackComponent={AppErrorFallback}>
             <ThemeProvider>

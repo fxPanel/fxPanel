@@ -88,12 +88,12 @@ export function AuthError({ error }: AuthErrorProps) {
 
     return (
         <div className="p-4">
-            <h3 className="text-destructive-inline mb-4 text-2xl font-bold">{titleNode}</h3>
+            <h3 className="text-destructive-inline mb-4 text-2xl font-semibold">{titleNode}</h3>
             {bodyNode}
             <CardFooter className="mt-4 flex w-full justify-center pb-0">
                 <Link href={error.returnTo} asChild>
                     <Button className="x">
-                        <ArrowLeftIcon className="mr-2 inline h-4 w-4" />
+                        <ArrowLeftIcon className="mr-2 inline size-4" />
                         Try Again
                     </Button>
                 </Link>
@@ -105,7 +105,7 @@ export function AuthError({ error }: AuthErrorProps) {
 /**
  * Check the URL search params for common OAuth errors and return them.
  */
-export const checkCommonOauthErrors = () => {
+const checkCommonOauthErrors = () => {
     const params = new URLSearchParams(window.location.search);
     const errorCode = params.get('error');
     const errorDescription = params.get('error_description');

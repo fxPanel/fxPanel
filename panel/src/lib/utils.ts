@@ -12,6 +12,19 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Creates deterministic sibling keys when stable content can repeat.
+ */
+export const createDuplicateKeyResolver = () => {
+    const counts = new Map<string, number>();
+
+    return (baseKey: string) => {
+        const occurrence = counts.get(baseKey) ?? 0;
+        counts.set(baseKey, occurrence + 1);
+        return `${baseKey}:${occurrence}`;
+    };
+};
+
+/**
  * Removes the indentation of multiline strings based on the minimum length of indentation
  */
 export const stripIndent = (src: string) => {
@@ -92,17 +105,9 @@ export const leaveSocketRoom = (roomName: string) => {
 };
 
 /**
- * Returns a random hsl() color - useful for testing react rendering stuff
- */
-export const createRandomHslColor = (alpha?: number) => {
-    const hue = Math.floor(Math.random() * 360);
-    return typeof alpha === 'number' ? `hsla(${hue}, 100%, 50%, ${alpha})` : `hsl(${hue}, 100%, 50%)`;
-};
-
-/**
  * Returns a deterministic hsl() color based on a seed string
  */
-export const createSeedHslColor = (seed: string, alpha?: number) => {
+const createSeedHslColor = (seed: string, alpha?: number) => {
     const hash = seed.split('').reduce((acc, char) => {
         return ((acc << 5) - acc + char.charCodeAt(0)) | 0;
     }, 0);
@@ -127,10 +132,12 @@ export const copyToClipboard = async (
         const clipElem = document.createElement('textarea');
         clipElem.id = 'clipboard-input-' + Math.random().toString(36).substring(2, 15);
         clipElem.value = value;
-        clipElem.style.position = 'fixed';
-        clipElem.style.opacity = '0';
-        clipElem.style.top = '0';
-        clipElem.style.left = '0';
+        Object.assign(clipElem.style, {
+            position: 'fixed',
+            opacity: '0',
+            top: '0',
+            left: '0',
+        });
         surrogate.appendChild(clipElem);
         clipElem.select();
         const result = document.execCommand('copy');

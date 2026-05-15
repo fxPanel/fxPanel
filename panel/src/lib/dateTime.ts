@@ -29,7 +29,7 @@ export const msToShortDuration = humanizeDuration.humanizer({
 /**
  * Converts a timestamp to Date, detecting if ts is seconds or milliseconds
  */
-export const tsToDate = (ts: number) => {
+const tsToDate = (ts: number) => {
     return new Date(ts < 10000000000 ? ts * 1000 : ts);
 };
 
@@ -49,7 +49,7 @@ export const dateToLocaleTimeString = (
 /**
  * Converts a timestamp to a locale time string
  */
-export const tsToLocaleTimeString = (
+const tsToLocaleTimeString = (
     ts: number,
     hour: 'numeric' | '2-digit' = '2-digit',
     minute: 'numeric' | '2-digit' = '2-digit',
@@ -76,7 +76,7 @@ export const tsToLocaleDateString = (ts: number, dateStyle: 'full' | 'long' | 'm
 /**
  * Translates a timestamp into a localized date time string
  */
-export const dateToLocaleDateTimeString = (
+const dateToLocaleDateTimeString = (
     time: Date,
     dateStyle: 'full' | 'long' | 'medium' | 'short' = 'long',
     timeStyle: 'full' | 'long' | 'medium' | 'short' = 'medium',

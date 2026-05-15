@@ -1,6 +1,6 @@
 import { useAtom } from 'jotai';
 import { atomWithStorage, createJSONStorage } from 'jotai/utils';
-import type { LiveConsoleOptions } from './LiveConsolePage';
+import type { LiveConsoleOptions } from '@/pages/LiveConsole/LiveConsolePage';
 
 /**
  * Custom storage adapter for LiveConsoleOptions
@@ -111,12 +111,10 @@ export const useLiveConsoleBookmarks = () => {
     return {
         bookmarks,
         addBookmark: (cmd: string) => {
-            if (!bookmarks.includes(cmd)) {
-                setBookmarks([cmd, ...bookmarks]);
-            }
+            setBookmarks((prev) => (prev.includes(cmd) ? prev : [cmd, ...prev]));
         },
         removeBookmark: (cmd: string) => {
-            setBookmarks(bookmarks.filter((b) => b !== cmd));
+            setBookmarks((prev) => prev.filter((bookmark) => bookmark !== cmd));
         },
     };
 };

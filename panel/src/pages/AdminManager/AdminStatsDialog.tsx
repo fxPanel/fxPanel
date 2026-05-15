@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 import {
     AdminRecentAction,
     AdminStatsEntry,
@@ -56,6 +56,19 @@ const sortActions = (actions: AdminRecentAction[], sort: SortMode) => {
     return sorted;
 };
 
+type AdminStatsDialogState = {
+    fetchedStats: AdminStatsEntry | undefined;
+    allActions: AdminRecentAction[] | null;
+    actionsLoading: boolean;
+};
+
+const reduceAdminStatsDialogState = (state: AdminStatsDialogState, action: Partial<AdminStatsDialogState>) => {
+    return {
+        ...state,
+        ...action,
+    };
+};
+
 function ActionTypeSection({
     label,
     icon,
@@ -103,7 +116,7 @@ function ActionTypeSection({
                 </div>
                 <div className="flex items-center gap-3">
                     <ChevronDownIcon
-                        className={cn('text-muted-foreground h-4 w-4 transition-transform', expanded && 'rotate-180')}
+                        className={cn('text-muted-foreground size-4 transition-transform', expanded && 'rotate-180')}
                     />
                 </div>
             </button>
@@ -114,7 +127,7 @@ function ActionTypeSection({
                     {/* Search + Sort controls */}
                     <div className="flex gap-2">
                         <div className="relative flex-1">
-                            <SearchIcon className="text-muted-foreground absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
+                            <SearchIcon className="text-muted-foreground absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
                             <Input
                                 placeholder="Search player or reason..."
                                 value={search}
@@ -158,7 +171,7 @@ function ActionTypeSection({
                                         {/* Revoked indicator */}
                                         {action.isRevoked && (
                                             <Undo2Icon
-                                                className="text-muted-foreground h-3 w-3 shrink-0"
+                                                className="text-muted-foreground size-3 shrink-0"
                                                 aria-label="Revoked"
                                             />
                                         )}
@@ -172,7 +185,7 @@ function ActionTypeSection({
                                                         className="text-accent-foreground flex cursor-pointer items-center gap-1 hover:underline"
                                                     >
                                                         {action.playerName}
-                                                        <ExternalLinkIcon className="h-3 w-3 shrink-0 opacity-50" />
+                                                        <ExternalLinkIcon className="size-3 shrink-0 opacity-50" />
                                                     </button>
                                                 ) : (
                                                     <span>{action.playerName}</span>
@@ -205,7 +218,7 @@ function ActionTypeSection({
             )}
 
             {expanded && actions.length === 0 && (
-                <div className="text-muted-foreground border-t px-3 py-3 text-center text-xs">
+                <div className="text-muted-foreground border-t p-3 text-center text-xs">
                     No {label.toLowerCase()} recorded.
                 </div>
             )}
@@ -226,7 +239,12 @@ export default function AdminStatsDialog({
     stats?: AdminStatsEntry;
     actionsRank?: number;
 }) {
-    const [fetchedStats, setFetchedStats] = useState<AdminStatsEntry | undefined>(undefined);
+    const [state, dispatch] = useReducer(reduceAdminStatsDialogState, {
+        fetchedStats: undefined,
+        allActions: null,
+        actionsLoading: false,
+    });
+    const { fetchedStats, allActions, actionsLoading } = state;
     const stats = propStats ?? fetchedStats;
     const safeStats: AdminStatsEntry = stats ?? {
         totalBans: 0,
@@ -245,8 +263,6 @@ export default function AdminStatsDialog({
     const revokedPercent =
         safeStats.totalActions > 0 ? Math.round((safeStats.revokedActions / safeStats.totalActions) * 100) : 0;
 
-    const [allActions, setAllActions] = useState<AdminRecentAction[] | null>(null);
-    const [actionsLoading, setActionsLoading] = useState(false);
     const openPlayerModal = useOpenPlayerModal();
     const openActionModal = useOpenActionModal();
     const actionsApi = useBackendApi<ApiGetAdminActionsResp>({
@@ -260,25 +276,24 @@ export default function AdminStatsDialog({
 
     useEffect(() => {
         if (!open) {
-            setAllActions(null);
-            setFetchedStats(undefined);
+            dispatch({ allActions: null, fetchedStats: undefined, actionsLoading: false });
             return;
         }
-        setActionsLoading(true);
+        dispatch({ actionsLoading: true });
         actionsApi({
             queryParams: { admin: adminName },
             success: (data) => {
                 if ('actions' in data) {
-                    setAllActions(data.actions);
+                    dispatch({ allActions: data.actions });
                 }
             },
-            finally: () => setActionsLoading(false),
+            finally: () => dispatch({ actionsLoading: false }),
         });
         if (!propStats) {
             statsApi({
                 success: (data) => {
                     if ('stats' in data) {
-                        setFetchedStats(data.stats[adminName]);
+                        dispatch({ fetchedStats: data.stats[adminName] });
                     }
                 },
             });
@@ -306,8 +321,8 @@ export default function AdminStatsDialog({
             <DialogContent className="max-w-lg">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <BarChart3Icon className="h-5 w-5" />
-                        {adminName} — Stats
+                        <BarChart3Icon className="size-5" />
+                        {adminName}: Stats
                     </DialogTitle>
                 </DialogHeader>
 
@@ -360,15 +375,15 @@ export default function AdminStatsDialog({
                         </div>
                         <div className="text-muted-foreground flex items-center justify-center gap-4 text-xs">
                             <span className="inline-flex items-center gap-1">
-                                <span className="bg-destructive h-2 w-2 rounded-full" />
+                                <span className="bg-destructive size-2 rounded-full" />
                                 Bans {bansPercent}%
                             </span>
                             <span className="inline-flex items-center gap-1">
-                                <span className="bg-muted-foreground h-2 w-2 rounded-full" />
+                                <span className="bg-muted-foreground size-2 rounded-full" />
                                 Kicks {kicksPercent}%
                             </span>
                             <span className="inline-flex items-center gap-1">
-                                <span className="bg-warning h-2 w-2 rounded-full" />
+                                <span className="bg-warning size-2 rounded-full" />
                                 Warns {warnsPercent}%
                             </span>
                         </div>
@@ -378,7 +393,7 @@ export default function AdminStatsDialog({
                     {safeStats.revokedActions > 0 && (
                         <div className="bg-muted/50 flex items-center justify-between rounded-lg px-3 py-2">
                             <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
-                                <RotateCcwIcon className="h-3.5 w-3.5" />
+                                <RotateCcwIcon className="size-3.5" />
                                 Revoked
                             </span>
                             <span className="text-sm font-medium">
@@ -390,13 +405,13 @@ export default function AdminStatsDialog({
                     {/* Action sections */}
                     {actionsLoading ? (
                         <div className="flex justify-center py-4">
-                            <Loader2Icon className="text-muted-foreground h-5 w-5 animate-spin" />
+                            <Loader2Icon className="text-muted-foreground size-5 animate-spin" />
                         </div>
                     ) : allActions ? (
                         <div className="space-y-2">
                             <ActionTypeSection
                                 label="Bans"
-                                icon={<GavelIcon className="text-destructive h-4 w-4" />}
+                                icon={<GavelIcon className="text-destructive size-4" />}
                                 colorClass="text-destructive"
                                 actions={bans}
                                 onPlayerClick={handlePlayerClick}
@@ -404,7 +419,7 @@ export default function AdminStatsDialog({
                             />
                             <ActionTypeSection
                                 label="Kicks"
-                                icon={<LogOutIcon className="text-muted-foreground h-4 w-4" />}
+                                icon={<LogOutIcon className="text-muted-foreground size-4" />}
                                 colorClass="text-muted-foreground"
                                 actions={kicks}
                                 onPlayerClick={handlePlayerClick}
@@ -412,7 +427,7 @@ export default function AdminStatsDialog({
                             />
                             <ActionTypeSection
                                 label="Warns"
-                                icon={<AlertTriangleIcon className="text-warning h-4 w-4" />}
+                                icon={<AlertTriangleIcon className="text-warning size-4" />}
                                 colorClass="text-warning"
                                 actions={warns}
                                 onPlayerClick={handlePlayerClick}

@@ -3,7 +3,7 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { useAtom } from 'jotai';
 import { useEventListener } from 'usehooks-ts';
 import { useContentRefresh } from '@/hooks/pages';
@@ -52,14 +52,31 @@ export type LiveConsoleOptions = {
 //Consts
 const keyDebounceTime = 150; //ms
 
+type LiveConsolePageState = {
+    isSaveSheetOpen: boolean;
+    isConnected: boolean;
+    showSearchBar: boolean;
+    hasOlderBlocks: boolean;
+    isLoadingOlder: boolean;
+};
+
+const reduceLiveConsolePageState = (state: LiveConsolePageState, action: Partial<LiveConsolePageState>) => {
+    return {
+        ...state,
+        ...action,
+    };
+};
+
 //Main component
-export default function LiveConsolePage() {
-    const [isSaveSheetOpen, setIsSaveSheetOpen] = useState(false);
-    const [isConnected, setIsConnected] = useState(false);
-    const [showSearchBar, setShowSearchBar] = useState(false);
-    const [hasReceivedData, setHasReceivedData] = useState(false);
-    const [hasOlderBlocks, setHasOlderBlocks] = useState(false);
-    const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+function useLiveConsoleController() {
+    const [state, dispatch] = useReducer(reduceLiveConsolePageState, {
+        isSaveSheetOpen: false,
+        isConnected: false,
+        showSearchBar: false,
+        hasOlderBlocks: false,
+        isLoadingOlder: false,
+    });
+    const { isSaveSheetOpen, isConnected, showSearchBar, hasOlderBlocks, isLoadingOlder } = state;
     const termInputRef = useRef<HTMLInputElement>(null);
     const [consoleOptions, setConsoleOptions] = useAtom(liveConsoleOptionsAtom);
     const consoleOptionsRef = useRef(consoleOptions);
@@ -90,6 +107,7 @@ export default function LiveConsolePage() {
      */
     const jumpBottomBtnRef = useRef<HTMLButtonElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const xtermMountCycleRef = useRef(0);
     const term = useMemo(() => new Terminal(terminalOptions), []);
     const fitAddon = useMemo(() => new FitAddon(), []);
     const searchAddon = useMemo(() => new SearchAddon(), []);
@@ -115,16 +133,46 @@ export default function LiveConsolePage() {
             return;
         }
 
-        const proposed = fitAddon.proposeDimensions();
-        if (proposed) {
-            term.resize(proposed.cols, proposed.rows);
-        } else {
-            console.log('refitTerminal: no proposed dimensions');
-        }
+        fitAddon.fit();
     };
     useEventListener('resize', debounce(100, refitTerminal));
 
     useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        let frameId = 0;
+        const scheduleRefit = () => {
+            cancelAnimationFrame(frameId);
+            frameId = requestAnimationFrame(() => {
+                refitTerminal();
+            });
+        };
+
+        const resizeObserver = new ResizeObserver(() => {
+            scheduleRefit();
+        });
+        resizeObserver.observe(container);
+        if (container.parentElement) {
+            resizeObserver.observe(container.parentElement);
+        }
+
+        const viewport = window.visualViewport;
+        const passiveListenerOptions: AddEventListenerOptions = { passive: true };
+        viewport?.addEventListener('resize', scheduleRefit, passiveListenerOptions);
+        viewport?.addEventListener('scroll', scheduleRefit, passiveListenerOptions);
+
+        return () => {
+            cancelAnimationFrame(frameId);
+            resizeObserver.disconnect();
+            viewport?.removeEventListener('resize', scheduleRefit, passiveListenerOptions);
+            viewport?.removeEventListener('scroll', scheduleRefit, passiveListenerOptions);
+        };
+    }, [term, fitAddon]);
+
+    useEffect(() => {
+        xtermMountCycleRef.current += 1;
+
         if (containerRef.current && jumpBottomBtnRef.current && !term.element) {
             console.log('live console xterm init');
             containerRef.current.innerHTML = ''; //due to HMR, the terminal element might still be there
@@ -212,6 +260,15 @@ export default function LiveConsolePage() {
                 return true;
             });
         }
+
+        return () => {
+            if (import.meta.env.DEV && xtermMountCycleRef.current === 1) {
+                return;
+            }
+
+            term.dispose();
+            xtermMountCycleRef.current = 0;
+        };
     }, [term]);
 
     // Re-apply xterm theme when light/dark mode changes
@@ -238,12 +295,12 @@ export default function LiveConsolePage() {
             }
         } else if (e.code === 'Escape') {
             searchAddon.clearDecorations();
-            setShowSearchBar(false);
+            dispatch({ showSearchBar: false });
         } else if (e.code === 'KeyF' && (e.ctrlKey || e.metaKey)) {
             if (showSearchBar) {
                 sendSearchKeyEvent('focus');
             } else {
-                setShowSearchBar(true);
+                dispatch({ showSearchBar: true });
             }
             e.preventDefault();
         } else if (e.code === 'F3') {
@@ -268,17 +325,18 @@ export default function LiveConsolePage() {
         for (let i = 0; i < lines.length; i++) {
             isNewTs = false;
             let line = lines[i];
+            const termPrefixState = termPrefixRef.current;
             //tries to extract timestamp
             try {
                 const { ts, content } = extractTermLineTimestamp(line);
                 if (ts) {
                     isNewTs = true;
                     line = content;
-                    termPrefixRef.current.ts = ts;
-                    termPrefixRef.current.prefix = formatTermTimestamp(ts, consoleOptions);
+                    termPrefixState.ts = ts;
+                    termPrefixState.prefix = formatTermTimestamp(ts, consoleOptionsRef.current);
                 }
             } catch (error) {
-                termPrefixRef.current.prefix = defaultTermPrefix;
+                termPrefixState.prefix = defaultTermPrefix;
                 console.warn('Failed to parse timestamp from:', line, emsg(error));
             }
 
@@ -304,17 +362,17 @@ export default function LiveConsolePage() {
 
             //Check if it's last line, and if the EOL was stripped
             const prefixColor = isNewTs ? ANSI.WHITE : ANSI.GRAY;
-            const prefix = termPrefixRef.current.lastEol ? prefixColor + termPrefixRef.current.prefix : '';
+            const prefix = termPrefixState.lastEol ? prefixColor + termPrefixState.prefix : '';
             if (i < lines.length - 1) {
                 term.writeln(prefix + line, writeCallback);
-                termPrefixRef.current.lastEol = true;
+                termPrefixState.lastEol = true;
             } else {
                 if (wasEolStripped) {
                     term.writeln(prefix + line, writeCallback);
-                    termPrefixRef.current.lastEol = true;
+                    termPrefixState.lastEol = true;
                 } else {
                     term.write(prefix + line, writeCallback);
-                    termPrefixRef.current.lastEol = false;
+                    termPrefixState.lastEol = false;
                 }
             }
         }
@@ -345,11 +403,11 @@ export default function LiveConsolePage() {
     useEffect(() => {
         const socket = getSocket();
         pageSocket.current = socket;
-        setIsConnected(socket.connected);
+        dispatch({ isConnected: socket.connected });
 
         const connectHandler = () => {
             console.log('LiveConsole Socket.IO Connected.');
-            setIsConnected(true);
+            dispatch({ isConnected: true });
         };
         const disconnectHandler = (message: string) => {
             console.log('LiveConsole Socket.IO Disconnected:', message);
@@ -359,7 +417,7 @@ export default function LiveConsolePage() {
             socketStateChangeCounter.current = newId;
             setTimeout(() => {
                 if (socketStateChangeCounter.current === newId) {
-                    setIsConnected(false);
+                    dispatch({ isConnected: false });
                 }
             }, 500);
         };
@@ -371,7 +429,6 @@ export default function LiveConsolePage() {
                 //Streaming data
                 if (!hasReceivedDataRef.current) {
                     hasReceivedDataRef.current = true;
-                    setHasReceivedData(true);
                 }
                 writeToTerminal(data);
             } else if (data && typeof data === 'object' && 'blocks' in data) {
@@ -380,15 +437,14 @@ export default function LiveConsolePage() {
                 serverOldestSeqRef.current = initData.oldestSeq;
                 if (initData.blocks.length > 0) {
                     hasReceivedDataRef.current = true;
-                    setHasReceivedData(true);
                     oldestLoadedSeqRef.current = initData.blocks[0].seq;
-                    setHasOlderBlocks(initData.blocks[0].seq > initData.oldestSeq);
+                    dispatch({ hasOlderBlocks: initData.blocks[0].seq > initData.oldestSeq });
                     for (const block of initData.blocks) {
                         writeToTerminal(block.data);
                     }
                 } else {
-                    setHasOlderBlocks(false);
-                    term.writeln(`\n${ANSI.YELLOW}Waiting for server output...${ANSI.RESET}`);
+                    dispatch({ hasOlderBlocks: false });
+                    term.writeln(`\n${ANSI.YELLOW}Waiting for server output…${ANSI.RESET}`);
                 }
             }
         };
@@ -440,7 +496,7 @@ export default function LiveConsolePage() {
     const clearConsole = () => {
         term.clear();
         searchAddon.clearDecorations();
-        setShowSearchBar(false);
+        dispatch({ showSearchBar: false });
         spawnLineNumbersRef.current = [];
         term.write(`${ANSI.YELLOW}[console cleared]${ANSI.RESET}\n`);
         //Persist the clear so reconnects don't restore old data
@@ -449,18 +505,18 @@ export default function LiveConsolePage() {
         }
     };
     const toggleSearchBar = () => {
-        setShowSearchBar(!showSearchBar);
+        dispatch({ showSearchBar: !showSearchBar });
     };
     const toggleSaveSheet = () => {
-        setIsSaveSheetOpen(!isSaveSheetOpen);
+        dispatch({ isSaveSheetOpen: !isSaveSheetOpen });
     };
     const loadOlderBlocks = () => {
         if (!pageSocket.current || isLoadingOlder || !hasOlderBlocks) return;
-        setIsLoadingOlder(true);
+        dispatch({ isLoadingOlder: true });
         pageSocket.current.emit('consoleLoadOlder' as any, oldestLoadedSeqRef.current, (resp: any) => {
-            setIsLoadingOlder(false);
+            dispatch({ isLoadingOlder: false });
             if (!resp || !resp.blocks || !resp.blocks.length) {
-                setHasOlderBlocks(false);
+                dispatch({ hasOlderBlocks: false });
                 return;
             }
             //Save scroll position
@@ -485,7 +541,7 @@ export default function LiveConsolePage() {
             //Update tracking
             oldestLoadedSeqRef.current = resp.blocks[0].seq;
             serverOldestSeqRef.current = resp.oldestSeq;
-            setHasOlderBlocks(resp.blocks[0].seq > resp.oldestSeq);
+            dispatch({ hasOlderBlocks: resp.blocks[0].seq > resp.oldestSeq });
 
             //Restore scroll position (offset by new lines added)
             const addedLines = term.buffer.active.baseY - prevBaseY;
@@ -520,75 +576,105 @@ export default function LiveConsolePage() {
             termInputRef.current.value = cmd;
             termInputRef.current.focus();
         }
-        setIsSaveSheetOpen(false);
+        dispatch({ isSaveSheetOpen: false });
     };
 
+    return {
+        isConnected,
+        hasSpawnLines: spawnLineNumbersRef.current.length > 0,
+        isSaveSheetOpen,
+        hasOlderBlocks,
+        isLoadingOlder,
+        showSearchBar,
+        searchAddon,
+        containerRef,
+        jumpBottomBtnRef,
+        termInputRef,
+        consoleOptions,
+        jumpToLastServerStart,
+        jumpToPreviousServerStart,
+        closeSaveSheet: () => dispatch({ isSaveSheetOpen: false }),
+        inputSuggestions,
+        loadOlderBlocks,
+        setShowSearchBar: (showSearchBar: boolean) => dispatch({ showSearchBar }),
+        scrollToBottom: () => term.scrollToBottom(),
+        consoleWrite,
+        clearConsole,
+        toggleSaveSheet,
+        toggleSearchBar,
+        setConsoleOptions,
+    };
+}
+
+export default function LiveConsolePage() {
+    const controller = useLiveConsoleController();
+
     return (
-        <div className="dark text-primary h-contentvh bg-card flex w-full flex-col overflow-clip border border-border/60 shadow-sm md:rounded-xl">
+        <div className="dark text-primary h-contentvh bg-card border-border/60 flex w-full flex-col overflow-clip border shadow-sm md:rounded-xl">
             <LiveConsoleHeader
-                isConnected={isConnected}
-                hasSpawnLines={spawnLineNumbersRef.current.length > 0}
-                onJumpToLastStart={jumpToLastServerStart}
-                onJumpToPrevStart={jumpToPreviousServerStart}
+                isConnected={controller.isConnected}
+                hasSpawnLines={controller.hasSpawnLines}
+                onJumpToLastStart={controller.jumpToLastServerStart}
+                onJumpToPrevStart={controller.jumpToPreviousServerStart}
             />
 
             <div className="relative flex grow flex-col overflow-hidden">
-                {/* Connecting overlay */}
-                {!isConnected ? (
+                {!controller.isConnected ? (
                     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60">
                         <div className="text-muted-foreground flex flex-col items-center justify-center gap-6 select-none">
-                            <Loader2Icon className="h-16 w-16 animate-spin" />
+                            <Loader2Icon className="size-16 animate-spin" />
                             <h2 className="animate-pulse text-3xl font-light tracking-wider">
-                                &nbsp;&nbsp;&nbsp;Connecting...
+                                &nbsp;&nbsp;&nbsp;Connecting…
                             </h2>
                         </div>
                     </div>
                 ) : null}
 
                 <LiveConsoleSaveSheet
-                    isOpen={isSaveSheetOpen}
-                    closeSheet={() => setIsSaveSheetOpen(false)}
-                    toTermInput={(cmd) => inputSuggestions(cmd)}
+                    isOpen={controller.isSaveSheetOpen}
+                    closeSheet={controller.closeSaveSheet}
+                    toTermInput={controller.inputSuggestions}
                 />
 
-                {/* Load older blocks button */}
-                {hasOlderBlocks && isConnected && (
+                {controller.hasOlderBlocks && controller.isConnected && (
                     <button
                         className="bg-secondary text-secondary-foreground hover:bg-secondary/80 absolute top-0 left-1/2 z-10 -translate-x-1/2 rounded-b px-3 py-1 text-xs font-medium opacity-80 transition-opacity hover:opacity-100"
-                        onClick={loadOlderBlocks}
-                        disabled={isLoadingOlder}
+                        onClick={controller.loadOlderBlocks}
+                        disabled={controller.isLoadingOlder}
                     >
-                        {isLoadingOlder ? 'Loading...' : 'Load older output'}
+                        {controller.isLoadingOlder ? 'Loading…' : 'Load older output'}
                     </button>
                 )}
 
-                {/* Terminal container */}
-                <div ref={containerRef} className="absolute top-1 right-0 bottom-0 left-2" />
+                <div
+                    ref={controller.containerRef}
+                    className="absolute top-1 right-0 bottom-0 left-2"
+                    role="region"
+                    aria-label="Live server console output"
+                />
 
-                {/* Search bar */}
-                <LiveConsoleSearchBar show={showSearchBar} setShow={setShowSearchBar} searchAddon={searchAddon} />
+                {controller.showSearchBar ? (
+                    <LiveConsoleSearchBar setShow={controller.setShowSearchBar} searchAddon={controller.searchAddon} />
+                ) : null}
 
-                {/* Scroll to bottom */}
                 <button
-                    ref={jumpBottomBtnRef}
+                    ref={controller.jumpBottomBtnRef}
                     className="absolute right-2 bottom-0 z-10 hidden opacity-75"
-                    onClick={() => {
-                        term.scrollToBottom();
-                    }}
+                    onClick={controller.scrollToBottom}
                 >
-                    <ChevronsDownIcon className="h-20 w-20 animate-pulse hover:scale-110 hover:animate-none" />
+                    <ChevronsDownIcon className="size-20 animate-pulse hover:scale-110 hover:animate-none" />
                 </button>
             </div>
 
             <LiveConsoleFooter
-                termInputRef={termInputRef}
-                isConnected={isConnected}
-                consoleWrite={consoleWrite}
-                consoleClear={clearConsole}
-                toggleSaveSheet={toggleSaveSheet}
-                toggleSearchBar={toggleSearchBar}
-                consoleOptions={consoleOptions}
-                onOptionsChange={setConsoleOptions}
+                termInputRef={controller.termInputRef}
+                isConnected={controller.isConnected}
+                consoleWrite={controller.consoleWrite}
+                consoleClear={controller.clearConsole}
+                toggleSaveSheet={controller.toggleSaveSheet}
+                toggleSearchBar={controller.toggleSearchBar}
+                consoleOptions={controller.consoleOptions}
+                onOptionsChange={controller.setConsoleOptions}
             />
         </div>
     );

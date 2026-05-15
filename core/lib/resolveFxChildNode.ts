@@ -1,0 +1,292 @@
+/**
+ * Resolves a usable Node.js executable for child processes (Discord bot, addon
+ * fork workers) on FXServer/cfx-server Linux artifacts where `process.execPath`
+ * is often the musl loader, not `node`, and `node` may be absent from PATH.
+ */
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+
+export type FxChildNodeRuntimeResolution = {
+    childExecPath?: string;
+    childExecArgvPrefix: string[];
+    candidateCount: number;
+    candidateSample: string[];
+    cfxRoot?: string;
+};
+
+let memoized: FxChildNodeRuntimeResolution | undefined;
+let computed = false;
+
+export function isHostProcessExecPathNodeLike(): boolean {
+    const execBase = path.basename(process.execPath).toLowerCase();
+    return execBase === 'node' || execBase === 'node.exe' || execBase.startsWith('node');
+}
+
+function computeFxChildNodeRuntimeResolution(): FxChildNodeRuntimeResolution {
+    const execBase = path.basename(process.execPath).toLowerCase();
+    const isMuslLoaderExec = execBase.startsWith('ld-musl');
+
+    const candidateSet = new Set<string>();
+    const execDir = path.dirname(process.execPath);
+    const cfxRootSet = new Set<string>();
+    const addCfxRoot = (root: string | undefined) => {
+        if (!root) return;
+        cfxRootSet.add(path.resolve(root));
+    };
+
+    addCfxRoot(execDir);
+    addCfxRoot(path.resolve(execDir, '..'));
+    addCfxRoot(path.resolve(execDir, '..', '..'));
+
+    const resolvedExecPathAbs = path.resolve(process.execPath);
+    const lowerExecPath = resolvedExecPathAbs.toLowerCase();
+    const markerWithSep = `${path.sep}cfx-server${path.sep}`;
+    const markerTail = `${path.sep}cfx-server`;
+    const markerIdx = lowerExecPath.lastIndexOf(markerWithSep);
+    if (markerIdx !== -1) {
+        addCfxRoot(resolvedExecPathAbs.slice(0, markerIdx + markerWithSep.length - 1));
+    } else if (lowerExecPath.endsWith(markerTail)) {
+        addCfxRoot(resolvedExecPathAbs);
+    }
+
+    const cfxRoots = [...cfxRootSet];
+    const cfxLibPaths = Array.from(
+        new Set(
+            cfxRoots.map(
+                (root) =>
+                    `${path.join(root, 'usr', 'lib', 'v8')}:${path.join(root, 'lib')}:${path.join(root, 'usr', 'lib')}`,
+            ),
+        ),
+    );
+    const nodeNameRegex = /^node(?:\d+)?(?:\.exe)?$/i;
+
+    const collectNodeBins = (root: string, maxDepth: number): string[] => {
+        if (!fs.existsSync(root)) return [];
+        const out: string[] = [];
+        const queue: Array<[string, number]> = [[root, 0]];
+
+        while (queue.length) {
+            const [dir, depth] = queue.shift()!;
+            let entries: fs.Dirent[];
+            try {
+                entries = fs.readdirSync(dir, { withFileTypes: true });
+            } catch {
+                continue;
+            }
+
+            for (const entry of entries) {
+                const fullPath = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    if (depth < maxDepth) queue.push([fullPath, depth + 1]);
+                    continue;
+                }
+
+                if (!(entry.isFile() || entry.isSymbolicLink())) continue;
+                if (nodeNameRegex.test(entry.name)) {
+                    out.push(fullPath);
+                }
+            }
+        }
+
+        return out;
+    };
+
+    const collectExecutableBins = (root: string, maxDepth: number, maxFiles: number): string[] => {
+        if (!fs.existsSync(root)) return [];
+        const out: string[] = [];
+        const queue: Array<[string, number]> = [[root, 0]];
+
+        while (queue.length && out.length < maxFiles) {
+            const [dir, depth] = queue.shift()!;
+            let entries: fs.Dirent[];
+            try {
+                entries = fs.readdirSync(dir, { withFileTypes: true });
+            } catch {
+                continue;
+            }
+
+            for (const entry of entries) {
+                if (out.length >= maxFiles) break;
+                const fullPath = path.join(dir, entry.name);
+
+                if (entry.isDirectory()) {
+                    if (depth < maxDepth) queue.push([fullPath, depth + 1]);
+                    continue;
+                }
+
+                if (!(entry.isFile() || entry.isSymbolicLink())) continue;
+
+                try {
+                    const st = fs.statSync(fullPath);
+                    if ((st.mode & 0o111) !== 0) {
+                        out.push(fullPath);
+                    }
+                } catch {
+                    // Ignore unreadable/broken entries.
+                }
+            }
+        }
+
+        return out;
+    };
+
+    const envNodeExecPath = process.env.npm_node_execpath ?? process.env.NODE;
+    const explicitBot = process.env.FXPANEL_BOT_NODE_PATH;
+    const explicitAddon = process.env.FXPANEL_ADDON_NODE_PATH;
+    for (const p of [explicitBot, explicitAddon]) {
+        if (typeof p === 'string' && p.length) {
+            candidateSet.add(p);
+        }
+    }
+    if (typeof envNodeExecPath === 'string' && envNodeExecPath.length) {
+        candidateSet.add(envNodeExecPath);
+    }
+
+    if (process.argv0 && path.isAbsolute(process.argv0)) {
+        candidateSet.add(process.argv0);
+    }
+
+    const siblingNode = path.join(path.dirname(process.execPath), process.platform === 'win32' ? 'node.exe' : 'node');
+    if (fs.existsSync(siblingNode)) {
+        candidateSet.add(siblingNode);
+    }
+
+    const cfxNodeCandidates = cfxRoots.flatMap((root) => [
+        path.join(root, 'usr', 'bin', 'node'),
+        path.join(root, 'usr', 'lib', 'v8', 'node'),
+        path.join(root, 'usr', 'lib', 'v8', 'bin', 'node'),
+        path.join(root, 'citizen', 'scripting', 'v8', 'node', 'bin', 'node'),
+        path.join(root, 'citizen', 'scripting', 'v8', 'node20', 'bin', 'node'),
+        path.join(root, 'citizen', 'scripting', 'v8', 'node16', 'bin', 'node'),
+        path.join(root, 'opt', 'cfx-server', 'citizen', 'scripting', 'v8', 'node', 'bin', 'node'),
+        path.join(root, 'opt', 'cfx-server', 'citizen', 'scripting', 'v8', 'node20', 'bin', 'node'),
+        path.join(root, 'opt', 'cfx-server', 'citizen', 'scripting', 'v8', 'node16', 'bin', 'node'),
+    ]);
+    for (const candidate of cfxNodeCandidates) {
+        if (fs.existsSync(candidate)) {
+            candidateSet.add(candidate);
+        }
+    }
+
+    const cfxNodeSearchRoots = cfxRoots.flatMap((root) => [
+        path.join(root, 'usr', 'lib', 'v8'),
+        path.join(root, 'citizen', 'scripting', 'v8'),
+        path.join(root, 'opt', 'cfx-server', 'citizen', 'scripting', 'v8'),
+        root,
+    ]);
+    for (const root of cfxNodeSearchRoots) {
+        for (const candidate of collectNodeBins(root, 7)) {
+            candidateSet.add(candidate);
+        }
+    }
+
+    const cfxExecSearchRoots = cfxRoots.flatMap((root) => [
+        path.join(root, 'usr', 'bin'),
+        path.join(root, 'usr', 'lib', 'v8'),
+        path.join(root, 'citizen', 'scripting'),
+        path.join(root, 'opt', 'cfx-server', 'citizen', 'scripting'),
+    ]);
+    for (const root of cfxExecSearchRoots) {
+        for (const candidate of collectExecutableBins(root, 6, 300)) {
+            candidateSet.add(candidate);
+        }
+    }
+
+    const lookupCmd = process.platform === 'win32' ? 'where' : 'which';
+    const nodeInPath = spawnSync(lookupCmd, ['node'], { stdio: 'ignore' });
+    if (!nodeInPath.error && nodeInPath.status === 0) {
+        candidateSet.add('node');
+    }
+
+    const candidates = [...candidateSet];
+    const looksLikeNodeVersion = (text: string) => /^v\d+\.\d+\.\d+$/m.test(text.trim());
+
+    const canExecuteDirect = (candidate: string) => {
+        const check = spawnSync(candidate, ['--version'], {
+            stdio: 'pipe',
+            encoding: 'utf8',
+            timeout: 1500,
+            killSignal: 'SIGKILL',
+        });
+        if (check.error || check.status !== 0) return false;
+        const outText = `${check.stdout ?? ''}\n${check.stderr ?? ''}`;
+        return looksLikeNodeVersion(outText);
+    };
+
+    const canExecuteViaMuslLoader = (candidate: string): string[] | null => {
+        if (!isMuslLoaderExec) return null;
+        for (const cfxLibPath of cfxLibPaths) {
+            const check = spawnSync(process.execPath, ['--library-path', cfxLibPath, '--', candidate, '--version'], {
+                stdio: 'pipe',
+                encoding: 'utf8',
+                timeout: 1500,
+                killSignal: 'SIGKILL',
+            });
+            if (check.error || check.status !== 0) continue;
+            const outText = `${check.stdout ?? ''}\n${check.stderr ?? ''}`;
+            if (looksLikeNodeVersion(outText)) {
+                return ['--library-path', cfxLibPath, '--', candidate];
+            }
+        }
+        return null;
+    };
+
+    let resolvedExecPath: string | undefined;
+    let resolvedExecPrefix: string[] = [];
+    for (const candidate of candidates) {
+        if (canExecuteDirect(candidate)) {
+            resolvedExecPath = candidate;
+            break;
+        }
+
+        const muslExecPrefix = canExecuteViaMuslLoader(candidate);
+        if (muslExecPrefix) {
+            resolvedExecPath = process.execPath;
+            resolvedExecPrefix = muslExecPrefix;
+            break;
+        }
+    }
+
+    return {
+        childExecPath: resolvedExecPath,
+        childExecArgvPrefix: resolvedExecPrefix,
+        candidateCount: candidates.length,
+        candidateSample: candidates.slice(0, 10),
+        cfxRoot: cfxRoots.slice(0, 4).join(' | '),
+    };
+}
+
+/**
+ * One-shot resolution for non-Node host execPath (musl loader, FXServer.exe, …).
+ * Safe to call from addon fork setup and Discord bot spawn.
+ */
+export function getFxChildNodeRuntimeResolution(): FxChildNodeRuntimeResolution {
+    if (!computed) {
+        computed = true;
+        memoized = computeFxChildNodeRuntimeResolution();
+    }
+    return memoized!;
+}
+
+/**
+ * Returns `{ file, args }` for `child_process.spawn` to run a Node script.
+ * Uses the same runtime as addon child processes when the host is not a Node binary.
+ *
+ * @returns `null` when no Node binary could be resolved (caller should not retry blindly).
+ */
+export function resolveFxChildNodeSpawn(scriptArgv: string[]): { file: string; args: string[] } | null {
+    if (isHostProcessExecPathNodeLike()) {
+        return { file: process.execPath, args: [...scriptArgv] };
+    }
+
+    const r = getFxChildNodeRuntimeResolution();
+    if (!r.childExecPath) {
+        return null;
+    }
+
+    return {
+        file: r.childExecPath,
+        args: [...r.childExecArgvPrefix, ...scriptArgv],
+    };
+}
