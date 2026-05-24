@@ -83,7 +83,8 @@
             "announcement_title": "Server oznámení od %{author}:",
             "dialog_empty_input": "Políčko nemůže být prázdné.",
             "directmessage_title": "Soukromá zpráva od admina %{author}:",
-            "onesync_error": "This action requires OneSync to be enabled."
+            "onesync_error": "Tato akce vyžaduje povolení OneSync.",
+            "redm_not_available": "Tato možnost zatím není dostupná pro RedM."
         },
         "frozen": {
             "froze_player": "Zmrazil jsi hráče!",
@@ -137,7 +138,7 @@
                     "label": "Teleportovat se na určité souřadnice",
                     "dialog_title": "Teleportovat se",
                     "dialog_desc": "Zadejte souřadnice ve formátu x, y, z pro teleportaci.",
-                    "dialog_error": "Neplatné souřadnice. Must be in the format of: 111, 222, 33"
+                    "dialog_error": "Neplatné souřadnice. Musí být ve formátu: 111, 222, 33"
                 },
                 "back": {
                     "title": "Zpět",
@@ -147,6 +148,10 @@
                 "copy": {
                     "title": "Zkopírovat souřadnice",
                     "label": "Zkopírovat souřadnice do schránky."
+                },
+                "goto": {
+                    "usage": "Použití: /goto [ID hráče]",
+                    "invalid_id": "Neplatné ID hráče. Musí být číslo."
                 }
             },
             "vehicle": {
@@ -194,6 +199,14 @@
                     "title": "Všechny",
                     "label": "Vyléčí a oživí všechny hráče",
                     "success": "Všichni hráči oživeni a vyléčeni."
+                },
+                "radius": {
+                    "title": "Poloměr",
+                    "label": "Vyléčí a oživí hráče v určitém poloměru",
+                    "dialog_title": "Vyléčit poloměr",
+                    "dialog_desc": "Zadejte poloměr (v jednotkách) pro vyléčení blízkých hráčů",
+                    "dialog_error": "Neplatný poloměr. Musí být mezi 1 a 500.",
+                    "success": "Vyléčeni hráči v zadaném poloměru."
                 }
             },
             "announcement": {
@@ -206,7 +219,7 @@
             "clear_area": {
                 "title": "Obnovit oblast",
                 "label": "Obnovit určitou oblast do původního stavu",
-                "dialog_desc": "Prosím vlož oblast pro obnovení (0-300). Toto nevytvoří entity vytvoření pomocí serveru.",
+                "dialog_desc": "Prosím zadejte poloměr, kde chcete resetovat entity (0-300). Toto nevymaže entity vytvořené serverovou stranou.",
                 "dialog_success": "Obnovuji oblast %{radius}m",
                 "dialog_error": "Neplatná oblast. Zkus to prosím znovu."
             },
@@ -345,6 +358,7 @@
             "ban": {
                 "title": "Zabanovat hráče",
                 "reason_placeholder": "Důvod",
+                "reason_required": "Důvod nemůže zůstat prázdný.",
                 "duration_placeholder": "Délka trvání",
                 "hours": "hodiny",
                 "days": "dny",
@@ -354,7 +368,6 @@
                 "custom": "Vlastní",
                 "helper_text": "Vyber délku banu!",
                 "submit": "Zabanovat",
-                "reason_required": "Důvod nemůže zůstat prázdný.",
                 "success": "Hráč byl zabanován!"
             },
             "ids": {
