@@ -725,5 +725,38 @@
                 "screenshot_attached": "Screenshot attached"
             }
         }
+    },
+    "panel": {
+        "sidebar": {
+            "section": {
+                "overview": "Overview",
+                "players": "Players",
+                "server": "Server",
+                "analytics": "Analytics",
+                "addons": "Addons",
+                "system": "System"
+            },
+            "item": {
+                "dashboard": "Dashboard",
+                "players": "Players",
+                "whitelist": "Whitelist",
+                "history": "History",
+                "reports": "Reports",
+                "live_console": "Live Console",
+                "resources": "Resources",
+                "cfg_editor": "CFG Editor",
+                "server_log": "Server Log",
+                "admins": "Admins",
+                "insights": "Insights",
+                "player_drops": "Player Drops",
+                "report_analytics": "Report Analytics",
+                "addon_manager": "Addon Manager",
+                "action_log": "Action Log",
+                "console_log": "Console Log",
+                "diagnostics": "Diagnostics",
+                "artifacts": "Artifacts",
+                "settings": "Settings"
+            }
+        }
     }
 }

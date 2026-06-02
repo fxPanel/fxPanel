@@ -725,5 +725,38 @@
                 "screenshot_attached": "Screenshot angehängt"
             }
         }
+    },
+    "panel": {
+        "sidebar": {
+            "section": {
+                "overview": "Übersicht",
+                "players": "Spieler",
+                "server": "Server",
+                "analytics": "Analytik",
+                "addons": "Addons",
+                "system": "System"
+            },
+            "item": {
+                "dashboard": "Dashboard",
+                "players": "Spieler",
+                "whitelist": "Whitelist",
+                "history": "Verlauf",
+                "reports": "Berichte",
+                "live_console": "Live-Konsole",
+                "resources": "Ressourcen",
+                "cfg_editor": "CFG-Editor",
+                "server_log": "Server-Protokoll",
+                "admins": "Administratoren",
+                "insights": "Einblicke",
+                "player_drops": "Spieler-Abfälle",
+                "report_analytics": "Bericht-Analytik",
+                "addon_manager": "Addon-Manager",
+                "action_log": "Aktionsprotokoll",
+                "console_log": "Konsolenprotokoll",
+                "diagnostics": "Diagnosen",
+                "artifacts": "Artefakte",
+                "settings": "Einstellungen"
+            }
+        }
     }
 }

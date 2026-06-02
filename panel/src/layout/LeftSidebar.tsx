@@ -6,6 +6,7 @@ import { useAdminPerms, useAuth } from '@/hooks/auth';
 import { useShellBreakpoints } from '@/hooks/useShellBreakpoints';
 import { serverNameAtom, fxRunnerStateAtom, txConfigStateAtom, useGlobalStatus } from '@/hooks/status';
 import { playerCountAtom } from '@/hooks/playerlist';
+import { useLocale } from '@/hooks/locale';
 import { useAtomValue } from 'jotai';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -696,6 +697,7 @@ export function SidebarNavContent() {
     const { hasPerm } = useAdminPerms();
     const { pages: addonPages } = useAddonLoader();
     const collapsed = useCollapsed();
+    const { t } = useLocale();
 
     return (
         <nav
@@ -704,61 +706,61 @@ export function SidebarNavContent() {
                 collapsed ? 'px-1' : 'px-2',
             )}
         >
-            <SidebarSection label="Overview">
-                <SidebarNavItem href="/" icon={LayoutDashboardIcon} label="Dashboard" />
+            <SidebarSection label={t('panel.sidebar.section.overview')}>
+                <SidebarNavItem href="/" icon={LayoutDashboardIcon} label={t('panel.sidebar.item.dashboard')} />
             </SidebarSection>
 
-            <SidebarSection label="Players">
-                <SidebarNavItem href="/players" icon={UsersIcon} label="Players" />
-                <SidebarNavItem href="/whitelist" icon={ShieldCheckIcon} label="Whitelist" />
-                <SidebarNavItem href="/history" icon={ClockIcon} label="History" />
+            <SidebarSection label={t('panel.sidebar.section.players')}>
+                <SidebarNavItem href="/players" icon={UsersIcon} label={t('panel.sidebar.item.players')} />
+                <SidebarNavItem href="/whitelist" icon={ShieldCheckIcon} label={t('panel.sidebar.item.whitelist')} />
+                <SidebarNavItem href="/history" icon={ClockIcon} label={t('panel.sidebar.item.history')} />
                 <SidebarNavItem
                     href="/reports"
                     icon={FlagIcon}
-                    label="Reports"
+                    label={t('panel.sidebar.item.reports')}
                     disabled={!hasPerm('players.reports')}
                 />
             </SidebarSection>
 
-            <SidebarSection label="Server">
+            <SidebarSection label={t('panel.sidebar.section.server')}>
                 <SidebarNavItem
                     href="/server/console"
                     icon={TerminalIcon}
-                    label="Live Console"
+                    label={t('panel.sidebar.item.live_console')}
                     disabled={!hasPerm('console.view')}
                 />
-                <SidebarNavItem href="/server/resources" icon={BoxIcon} label="Resources" />
+                <SidebarNavItem href="/server/resources" icon={BoxIcon} label={t('panel.sidebar.item.resources')} />
                 <SidebarNavItem
                     href="/server/cfg-editor"
                     icon={FileCodeIcon}
-                    label="CFG Editor"
+                    label={t('panel.sidebar.item.cfg_editor')}
                     disabled={!hasPerm('server.cfg.editor')}
                 />
                 <SidebarNavItem
                     href="/server/server-log"
                     icon={FileTextIcon}
-                    label="Server Log"
+                    label={t('panel.sidebar.item.server_log')}
                     disabled={!hasPerm('server.log.view')}
                 />
-                <SidebarNavItem href="/admins" icon={ShieldIcon} label="Admins" disabled={!hasPerm('manage.admins')} />
+                <SidebarNavItem href="/admins" icon={ShieldIcon} label={t('panel.sidebar.item.admins')} disabled={!hasPerm('manage.admins')} />
             </SidebarSection>
 
-            <SidebarSection label="Analytics">
-                <SidebarNavItem href="/insights" icon={ActivityIcon} label="Insights" />
-                <SidebarNavItem href="/server/player-drops" icon={TrendingDownIcon} label="Player Drops" />
+            <SidebarSection label={t('panel.sidebar.section.analytics')}>
+                <SidebarNavItem href="/insights" icon={ActivityIcon} label={t('panel.sidebar.item.insights')} />
+                <SidebarNavItem href="/server/player-drops" icon={TrendingDownIcon} label={t('panel.sidebar.item.player_drops')} />
                 <SidebarNavItem
                     href="/reports/analytics"
                     icon={BarChart3Icon}
-                    label="Report Analytics"
+                    label={t('panel.sidebar.item.report_analytics')}
                     disabled={!hasPerm('players.reports')}
                 />
             </SidebarSection>
 
-            <SidebarSection label="Addons">
+            <SidebarSection label={t('panel.sidebar.section.addons')}>
                 <SidebarNavItem
                     href="/addons"
                     icon={BlocksIcon}
-                    label="Addon Manager"
+                    label={t('panel.sidebar.item.addon_manager')}
                     disabled={!hasPerm('all_permissions')}
                 />
                 {addonPages.map((page) => (
@@ -772,30 +774,30 @@ export function SidebarNavContent() {
                 ))}
             </SidebarSection>
 
-            <SidebarSection label="System">
+            <SidebarSection label={t('panel.sidebar.section.system')}>
                 <SidebarNavItem
                     href="/system/action-log"
                     icon={ClipboardListIcon}
-                    label="Action Log"
+                    label={t('panel.sidebar.item.action_log')}
                     disabled={!hasPerm('txadmin.log.view')}
                 />
                 <SidebarNavItem
                     href="/system/console-log"
                     icon={ScrollTextIcon}
-                    label="Console Log"
+                    label={t('panel.sidebar.item.console_log')}
                     disabled={!hasPerm('txadmin.log.view')}
                 />
-                <SidebarNavItem href="/system/diagnostics" icon={SlidersHorizontalIcon} label="Diagnostics" />
+                <SidebarNavItem href="/system/diagnostics" icon={SlidersHorizontalIcon} label={t('panel.sidebar.item.diagnostics')} />
                 <SidebarNavItem
                     href="/system/artifacts"
                     icon={PackageIcon}
-                    label="Artifacts"
+                    label={t('panel.sidebar.item.artifacts')}
                     disabled={!hasPerm('all_permissions')}
                 />
                 <SidebarNavItem
                     href="/settings"
                     icon={Settings2Icon}
-                    label="Settings"
+                    label={t('panel.sidebar.item.settings')}
                     disabled={!hasPerm('settings.view')}
                 />
                 {import.meta.env.DEV && (
