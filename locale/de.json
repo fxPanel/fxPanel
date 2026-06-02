@@ -84,8 +84,8 @@
             "dialog_empty_input": "Du kannst keine leere Eingabe senden.",
             "directmessage_title": "DM von Admin %{author}:",
             "onesync_error": "Für diese Aktion muss OneSync aktiviert sein.",
-            "no_perms_action": "Du hast keine Berechtigung, %{action} bei Spielern zu verwenden.",
-            "usage_action": "Verwendung: /%{action} [spielerID]",
+            "no_perms_action": "Du hast keine Berechtigung, %{action} bei Spielern auszuführen.",
+            "usage_action": "Verwendung: /%{action} [spieler-id]",
             "redm_not_available": "Diese Option ist für RedM noch nicht verfügbar."
         },
         "frozen": {
