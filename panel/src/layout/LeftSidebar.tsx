@@ -48,6 +48,7 @@ import { useOpenConfirmDialog, useOpenPromptDialog, useAccountModal } from '@/ho
 import { ApiTimeout, useBackendApi } from '@/hooks/fetch';
 import { useCloseAllSheets } from '@/hooks/sheets';
 import { useAddonLoader } from '@/hooks/addons';
+import { SIDEBAR_SECTIONS } from './sidebarConfig';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -706,108 +707,37 @@ export function SidebarNavContent() {
                 collapsed ? 'px-1' : 'px-2',
             )}
         >
-            <SidebarSection label={t('panel.sidebar.section.overview')}>
-                <SidebarNavItem href="/" icon={LayoutDashboardIcon} label={t('panel.sidebar.item.dashboard')} />
-            </SidebarSection>
-
-            <SidebarSection label={t('panel.sidebar.section.players')}>
-                <SidebarNavItem href="/players" icon={UsersIcon} label={t('panel.sidebar.item.players')} />
-                <SidebarNavItem href="/whitelist" icon={ShieldCheckIcon} label={t('panel.sidebar.item.whitelist')} />
-                <SidebarNavItem href="/history" icon={ClockIcon} label={t('panel.sidebar.item.history')} />
-                <SidebarNavItem
-                    href="/reports"
-                    icon={FlagIcon}
-                    label={t('panel.sidebar.item.reports')}
-                    disabled={!hasPerm('players.reports')}
-                />
-            </SidebarSection>
-
-            <SidebarSection label={t('panel.sidebar.section.server')}>
-                <SidebarNavItem
-                    href="/server/console"
-                    icon={TerminalIcon}
-                    label={t('panel.sidebar.item.live_console')}
-                    disabled={!hasPerm('console.view')}
-                />
-                <SidebarNavItem href="/server/resources" icon={BoxIcon} label={t('panel.sidebar.item.resources')} />
-                <SidebarNavItem
-                    href="/server/cfg-editor"
-                    icon={FileCodeIcon}
-                    label={t('panel.sidebar.item.cfg_editor')}
-                    disabled={!hasPerm('server.cfg.editor')}
-                />
-                <SidebarNavItem
-                    href="/server/server-log"
-                    icon={FileTextIcon}
-                    label={t('panel.sidebar.item.server_log')}
-                    disabled={!hasPerm('server.log.view')}
-                />
-                <SidebarNavItem href="/admins" icon={ShieldIcon} label={t('panel.sidebar.item.admins')} disabled={!hasPerm('manage.admins')} />
-            </SidebarSection>
-
-            <SidebarSection label={t('panel.sidebar.section.analytics')}>
-                <SidebarNavItem href="/insights" icon={ActivityIcon} label={t('panel.sidebar.item.insights')} />
-                <SidebarNavItem href="/server/player-drops" icon={TrendingDownIcon} label={t('panel.sidebar.item.player_drops')} />
-                <SidebarNavItem
-                    href="/reports/analytics"
-                    icon={BarChart3Icon}
-                    label={t('panel.sidebar.item.report_analytics')}
-                    disabled={!hasPerm('players.reports')}
-                />
-            </SidebarSection>
-
-            <SidebarSection label={t('panel.sidebar.section.addons')}>
-                <SidebarNavItem
-                    href="/addons"
-                    icon={BlocksIcon}
-                    label={t('panel.sidebar.item.addon_manager')}
-                    disabled={!hasPerm('all_permissions')}
-                />
-                {addonPages.map((page) => (
-                    <SidebarNavItem
-                        key={page.path}
-                        href={page.path}
-                        icon={BlocksIcon}
-                        label={page.title}
-                        disabled={page.permission ? !hasPerm(page.permission) : false}
-                    />
-                ))}
-            </SidebarSection>
-
-            <SidebarSection label={t('panel.sidebar.section.system')}>
-                <SidebarNavItem
-                    href="/system/action-log"
-                    icon={ClipboardListIcon}
-                    label={t('panel.sidebar.item.action_log')}
-                    disabled={!hasPerm('txadmin.log.view')}
-                />
-                <SidebarNavItem
-                    href="/system/console-log"
-                    icon={ScrollTextIcon}
-                    label={t('panel.sidebar.item.console_log')}
-                    disabled={!hasPerm('txadmin.log.view')}
-                />
-                <SidebarNavItem href="/system/diagnostics" icon={SlidersHorizontalIcon} label={t('panel.sidebar.item.diagnostics')} />
-                <SidebarNavItem
-                    href="/system/artifacts"
-                    icon={PackageIcon}
-                    label={t('panel.sidebar.item.artifacts')}
-                    disabled={!hasPerm('all_permissions')}
-                />
-                <SidebarNavItem
-                    href="/settings"
-                    icon={Settings2Icon}
-                    label={t('panel.sidebar.item.settings')}
-                    disabled={!hasPerm('settings.view')}
-                />
-                {import.meta.env.DEV && (
-                    <SidebarNavItem
-                        href="/advanced"
-                        icon={WrenchIcon}
-                        label="Advanced"
-                        disabled={!hasPerm('all_permissions')}
-                    />
-                )}
+            {SIDEBAR_SECTIONS.map((section) => (
+                <SidebarSection key={section.sectionKey} label={t(section.sectionKey)}>
+                    {section.items.map((item) => (
+                        <SidebarNavItem
+                            key={item.href}
+                            href={item.href}
+                            icon={item.icon}
+                            label={t(item.labelKey)}
+                            disabled={item.permission ? !hasPerm(item.permission) : false}
+                        />
+                    ))}
+                    {section.sectionKey === 'panel.sidebar.section.addons' &&
+                        addonPages.map((page) => (
+                            <SidebarNavItem
+                                key={page.path}
+                                href={page.path}
+                                icon={BlocksIcon}
+                                label={page.title}
+                                disabled={page.permission ? !hasPerm(page.permission) : false}
+                            />
+                        ))}
+                    {import.meta.env.DEV && section.sectionKey === 'panel.sidebar.section.system' && (
+                        <SidebarNavItem
+                            href="/advanced"
+                            icon={WrenchIcon}
+                            label="Advanced"
+                            disabled={!hasPerm('all_permissions')}
+                        />
+                    )}
+                </SidebarSection>
+            ))}
             </SidebarSection>
         </nav>
     );
